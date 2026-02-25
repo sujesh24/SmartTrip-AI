@@ -22,9 +22,13 @@ class _ItineraryOneState extends State<ItineraryOne> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
       backgroundColor: AppColors.lightBackground,
       appBar: AppBar(
-        backgroundColor: AppColors.lightBackground,
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         elevation: 0,
         automaticallyImplyLeading: false,
         leading: IconButton(
@@ -33,12 +37,12 @@ class _ItineraryOneState extends State<ItineraryOne> {
               Navigator.pop(context);
             }
           },
-          icon: const Icon(Icons.arrow_back, color: AppColors.primaryGreen),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
         ),
         actions: <Widget>[
           IconButton(
             onPressed: () {},
-            icon: const Icon(Icons.close, color: AppColors.primaryGreen),
+            icon: const Icon(Icons.close, color: Colors.white),
           ),
         ],
       ),
@@ -49,43 +53,25 @@ class _ItineraryOneState extends State<ItineraryOne> {
             flex: 60,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: SingleChildScrollView(
+              child: ListView(
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-                ),
-                child: _ItineraryBody(
-                  destinationController: _destinationController,
-                ),
+                padding: const EdgeInsets.only(top: 48, bottom: 24),
+                children: <Widget>[
+                  const ItineraryStepIndicator(activeStep: 1),
+                  const SizedBox(height: 42),
+                  const _HolidayQuestion(),
+                  const SizedBox(height: 72),
+                  _DestinationInputField(controller: _destinationController),
+                  const SizedBox(height: 120),
+                  const _NextButton(),
+                  const SizedBox(height: 34),
+                ],
               ),
             ),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _ItineraryBody extends StatelessWidget {
-  const _ItineraryBody({required this.destinationController});
-
-  final TextEditingController destinationController;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: <Widget>[
-        const SizedBox(height: 48),
-        const ItineraryStepIndicator(activeStep: 1),
-        const SizedBox(height: 42),
-        const _HolidayQuestion(),
-        const SizedBox(height: 72),
-        _DestinationInputField(controller: destinationController),
-        const SizedBox(height: 120),
-        const _NextButton(),
-        const SizedBox(height: 34),
-      ],
     );
   }
 }
