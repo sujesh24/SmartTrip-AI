@@ -17,6 +17,8 @@ class ItineraryStepIndicator extends StatelessWidget {
       children: List<Widget>.generate(totalSteps, (int index) {
         final int step = index + 1;
         final bool isActive = step == activeStep;
+        final bool isCompleted = step < activeStep;
+        final bool isHighlighted = isActive || isCompleted;
 
         return Expanded(
           child: Row(
@@ -26,9 +28,11 @@ class ItineraryStepIndicator extends StatelessWidget {
                 height: 39,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isActive ? AppColors.primaryGreen : Colors.transparent,
+                  color: isHighlighted
+                      ? AppColors.primaryGreen
+                      : Colors.transparent,
                   border: Border.all(
-                    color: isActive
+                    color: isHighlighted
                         ? AppColors.primaryGreen
                         : AppColors.borderGreen,
                   ),
@@ -37,7 +41,9 @@ class ItineraryStepIndicator extends StatelessWidget {
                   child: Text(
                     '$step',
                     style: TextStyle(
-                      color: isActive ? Colors.white : AppColors.borderGreen,
+                      color: isHighlighted
+                          ? Colors.white
+                          : AppColors.borderGreen,
                       fontSize: 20,
                     ),
                   ),

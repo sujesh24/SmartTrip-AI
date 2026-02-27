@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/core/common/app_colors.dart';
 import 'package:smarttrip_ai/presentation/widget/itinerary_header.dart';
+import 'package:smarttrip_ai/presentation/screen/itinerary_two.dart';
 import 'package:smarttrip_ai/presentation/widget/itinerary_step_indicator.dart';
 
 class ItineraryOne extends StatefulWidget {
@@ -64,13 +65,33 @@ class _ItineraryOneState extends State<ItineraryOne> {
                   const SizedBox(height: 50),
                   _DestinationInputField(controller: _destinationController),
                   const SizedBox(height: 140),
-                  const _NextButton(),
+                  _NextButton(
+                    onPressed: _goToStepTwo,
+                  ),
                   const SizedBox(height: 34),
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _goToStepTwo() {
+    final String destination = _destinationController.text.trim();
+    if (destination.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter destination before continuing.'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const ItineraryTwo(),
       ),
     );
   }
@@ -142,13 +163,15 @@ class _DestinationInputField extends StatelessWidget {
 }
 
 class _NextButton extends StatelessWidget {
-  const _NextButton();
+  const _NextButton({required this.onPressed});
+
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     return Align(
       child: ElevatedButton(
-        onPressed: () {},
+        onPressed: onPressed,
         style: ElevatedButton.styleFrom(
           minimumSize: const Size(160, 50),
           padding: const EdgeInsets.symmetric(horizontal: 24),
