@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/core/common/app_colors.dart';
+import 'package:smarttrip_ai/core/common/app_snack_bar.dart';
 import 'package:smarttrip_ai/presentation/widget/itinerary_header.dart';
 import 'package:smarttrip_ai/presentation/screen/itinerary_two.dart';
 import 'package:smarttrip_ai/presentation/widget/itinerary_step_indicator.dart';
@@ -65,9 +66,7 @@ class _ItineraryOneState extends State<ItineraryOne> {
                   const SizedBox(height: 50),
                   _DestinationInputField(controller: _destinationController),
                   const SizedBox(height: 140),
-                  _NextButton(
-                    onPressed: _goToStepTwo,
-                  ),
+                  _NextButton(onPressed: _goToStepTwo),
                   const SizedBox(height: 34),
                 ],
               ),
@@ -81,19 +80,16 @@ class _ItineraryOneState extends State<ItineraryOne> {
   void _goToStepTwo() {
     final String destination = _destinationController.text.trim();
     if (destination.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter destination before continuing.'),
-        ),
+      AppSnackBar.showError(
+        context,
+        'Please enter destination before continuing.',
       );
       return;
     }
 
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const ItineraryTwo(),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const ItineraryTwo()));
   }
 }
 
