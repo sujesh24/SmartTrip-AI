@@ -61,9 +61,9 @@ class _ItineraryOneState extends State<ItineraryOne> {
                   const ItineraryStepIndicator(activeStep: 1),
                   const SizedBox(height: 42),
                   const _HolidayQuestion(),
-                  const SizedBox(height: 72),
+                  const SizedBox(height: 50),
                   _DestinationInputField(controller: _destinationController),
-                  const SizedBox(height: 120),
+                  const SizedBox(height: 140),
                   const _NextButton(),
                   const SizedBox(height: 34),
                 ],
@@ -101,42 +101,39 @@ class _DestinationInputField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 45,
-      child: TextField(
-        controller: controller,
-        textAlignVertical: TextAlignVertical.center,
-        style: const TextStyle(color: AppColors.primaryGreen, fontSize: 18),
-        decoration: InputDecoration(
-          isDense: true,
-          hintText: 'i.e, Sydney, London etc.',
-          hintStyle: TextStyle(
-            color: AppColors.primaryGreen.withValues(alpha: 0.45),
-            fontSize: 18,
-          ),
-          prefixIcon: const Icon(
-            Icons.place_outlined,
-            color: AppColors.borderGreen,
-            size: 22,
-          ),
-          prefixIconConstraints: const BoxConstraints(
-            minWidth: 38,
-            minHeight: 39,
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 0,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.borderGreen),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(
-              color: AppColors.primaryGreen,
-              width: 1.4,
-            ),
+    return TextField(
+      controller: controller,
+      textAlignVertical: TextAlignVertical.center,
+      style: const TextStyle(color: AppColors.primaryGreen, fontSize: 18),
+      decoration: InputDecoration(
+        constraints: const BoxConstraints(minHeight: 70),
+        hintText: 'i.e, Sydney, London etc.',
+        hintStyle: TextStyle(
+          color: AppColors.primaryGreen.withValues(alpha: 0.45),
+          fontSize: 18,
+        ),
+        prefixIcon: const Icon(
+          Icons.place_outlined,
+          color: AppColors.borderGreen,
+          size: 22,
+        ),
+        prefixIconConstraints: const BoxConstraints(
+          minWidth: 44,
+          minHeight: 60,
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 18,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.borderGreen),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(
+            color: AppColors.primaryGreen,
+            width: 1.4,
           ),
         ),
       ),
@@ -149,12 +146,12 @@ class _NextButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 160,
-      height: 49,
+    return Align(
       child: ElevatedButton(
         onPressed: () {},
         style: ElevatedButton.styleFrom(
+          minimumSize: const Size(160, 50),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           backgroundColor: AppColors.primaryGreen,
           elevation: 0,
           shape: RoundedRectangleBorder(

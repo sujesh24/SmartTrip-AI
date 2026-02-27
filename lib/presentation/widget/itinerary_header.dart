@@ -33,7 +33,7 @@ class ItineraryHeader extends StatelessWidget {
         const Align(
           alignment: Alignment.bottomCenter,
           child: Padding(
-            padding: EdgeInsets.only(left: 18, right: 18, bottom: 38),
+            padding: EdgeInsets.only(left: 18, right: 18, bottom: 130),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
@@ -41,7 +41,7 @@ class ItineraryHeader extends StatelessWidget {
                   AppStrings.itineraryTitle,
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 48,
+                    fontSize: 45,
                     fontWeight: FontWeight.w500,
                     letterSpacing: 0.5,
                     height: 1,
@@ -54,7 +54,7 @@ class ItineraryHeader extends StatelessWidget {
                   style: TextStyle(
                     color: Colors.white,
                     fontStyle: FontStyle.italic,
-                    fontSize: 22,
+                    fontSize: 18,
                     height: 1.1,
                   ),
                 ),
