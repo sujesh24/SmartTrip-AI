@@ -25,7 +25,7 @@ class _ItineraryFourState extends State<ItineraryFour> {
         padding: const EdgeInsets.only(top: 48, bottom: 24),
         children: <Widget>[
           const ItineraryStepIndicator(activeStep: 4),
-          const SizedBox(height: 42),
+          const SizedBox(height: 25),
           const ItinerarySectionTitle(text: 'What are you interest in?'),
           const SizedBox(height: 8),
           Text(
@@ -39,7 +39,7 @@ class _ItineraryFourState extends State<ItineraryFour> {
           ),
           const SizedBox(height: 14),
           ..._buildInterestOptions(),
-          const SizedBox(height: 52),
+          const SizedBox(height: 10),
           ItineraryPrimaryButton(label: 'Next', onPressed: _onNextPressed),
           const SizedBox(height: 34),
         ],
