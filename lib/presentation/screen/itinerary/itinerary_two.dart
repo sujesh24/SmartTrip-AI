@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/core/common/app_colors.dart';
 import 'package:smarttrip_ai/core/common/app_snack_bar.dart';
 import 'package:smarttrip_ai/presentation/model/date_target.dart';
+import 'package:smarttrip_ai/presentation/screen/itinerary/itinerary_three.dart';
 import 'package:smarttrip_ai/presentation/viewmodel/itinerary_date_range_view_model.dart';
 import 'package:smarttrip_ai/presentation/widget/itinerary/itinerary_page_layout.dart';
 import 'package:smarttrip_ai/presentation/widget/itinerary/itinerary_primary_button.dart';
@@ -112,6 +113,10 @@ class _ItineraryTwoState extends State<ItineraryTwo> {
       _showValidationMessage(message);
       return;
     }
+
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const ItineraryThree()));
   }
 
   void _showValidationMessage(String message) {
