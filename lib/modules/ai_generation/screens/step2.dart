@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:smarttrip_ai/core/common/app_colors.dart';
-import 'package:smarttrip_ai/core/common/app_snack_bar.dart';
-import 'package:smarttrip_ai/presentation/model/date_target.dart';
-import 'package:smarttrip_ai/presentation/screen/itinerary/itinerary_three.dart';
-import 'package:smarttrip_ai/presentation/viewmodel/itinerary_date_range_view_model.dart';
-import 'package:smarttrip_ai/presentation/widget/itinerary/itinerary_page_layout.dart';
-import 'package:smarttrip_ai/presentation/widget/itinerary/itinerary_primary_button.dart';
-import 'package:smarttrip_ai/presentation/widget/itinerary/itinerary_section_title.dart';
-import 'package:smarttrip_ai/presentation/widget/itinerary/itinerary_step_indicator.dart';
+import 'package:smarttrip_ai/modules/ai_generation/common/app_colors.dart';
+import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
+import 'package:smarttrip_ai/modules/ai_generation/models/date_target.dart';
+import 'package:smarttrip_ai/modules/ai_generation/screens/step3.dart';
+import 'package:smarttrip_ai/modules/ai_generation/viewmodels/itinerary_date_range_view_model.dart';
+import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_page_layout.dart';
+import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_primary_button.dart';
+import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_section_title.dart';
+import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_step_indicator.dart';
 
 class ItineraryTwo extends StatefulWidget {
   const ItineraryTwo({super.key});

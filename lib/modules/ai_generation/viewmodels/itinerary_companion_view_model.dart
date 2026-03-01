@@ -1,4 +1,4 @@
-import 'package:smarttrip_ai/presentation/model/travel_companion.dart';
+import 'package:smarttrip_ai/modules/ai_generation/models/travel_companion.dart';
 
 class ItineraryCompanionViewModel {
   TravelCompanion? selectedCompanion = TravelCompanion.solo;

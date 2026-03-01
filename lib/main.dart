@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:smarttrip_ai/presentation/screen/itinerary/itinerary_one.dart';
+import 'package:smarttrip_ai/modules/ai_generation/screens/step1.dart';
 
 void main() {
   runApp(const MyApp());

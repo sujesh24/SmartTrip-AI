@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:smarttrip_ai/core/common/app_assets.dart';
-import 'package:smarttrip_ai/core/common/app_strings.dart';
+import 'package:smarttrip_ai/modules/ai_generation/common/app_assets.dart';
+import 'package:smarttrip_ai/modules/ai_generation/common/app_strings.dart';
 
 class ItineraryHeader extends StatelessWidget {
   const ItineraryHeader({super.key});

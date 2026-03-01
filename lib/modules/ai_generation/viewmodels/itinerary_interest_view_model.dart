@@ -1,4 +1,4 @@
-import 'package:smarttrip_ai/presentation/model/interest_option.dart';
+import 'package:smarttrip_ai/modules/ai_generation/models/interest_option.dart';
 
 class ItineraryInterestViewModel {
   final Set<InterestOption> _selected = <InterestOption>{};

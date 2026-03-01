@@ -1,4 +1,4 @@
-import 'package:smarttrip_ai/presentation/model/date_target.dart';
+import 'package:smarttrip_ai/modules/ai_generation/models/date_target.dart';
 
 class ItineraryDateRangeViewModel {
   ItineraryDateRangeViewModel({DateTime? now})
