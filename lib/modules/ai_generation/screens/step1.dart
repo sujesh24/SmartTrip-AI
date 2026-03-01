@@ -58,12 +58,8 @@ class _ItineraryOneState extends State<ItineraryOne> {
 
     final ItineraryRequest request = ItineraryRequest(destination: destination);
 
-    Navigator.of(
-      context,
-    ).push(
-      MaterialPageRoute<void>(
-        builder: (_) => ItineraryTwo(request: request),
-      ),
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => ItineraryTwo(request: request)),
     );
   }
 }

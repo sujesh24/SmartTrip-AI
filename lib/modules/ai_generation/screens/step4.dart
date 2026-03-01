@@ -79,9 +79,7 @@ class _ItineraryFourState extends State<ItineraryFour> {
         .map((InterestOption option) => option.label)
         .toList();
 
-    Navigator.of(
-      context,
-    ).push(
+    Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ItineraryFive(request: widget.request),
       ),

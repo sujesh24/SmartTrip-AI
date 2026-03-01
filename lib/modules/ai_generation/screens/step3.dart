@@ -75,9 +75,7 @@ class _ItineraryThreeState extends State<ItineraryThree> {
 
     widget.request.companion = _companionLabel(_viewModel.selectedCompanion!);
 
-    Navigator.of(
-      context,
-    ).push(
+    Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ItineraryFour(request: widget.request),
       ),

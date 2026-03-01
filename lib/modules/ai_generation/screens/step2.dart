@@ -120,9 +120,7 @@ class _ItineraryTwoState extends State<ItineraryTwo> {
     widget.request.startDate = _formatDate(_viewModel.fromDate!);
     widget.request.endDate = _formatDate(_viewModel.toDate!);
 
-    Navigator.of(
-      context,
-    ).push(
+    Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ItineraryThree(request: widget.request),
       ),

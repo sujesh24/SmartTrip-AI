@@ -3,13 +3,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_assets.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_colors.dart';
+import 'package:smarttrip_ai/modules/ai_generation/models/itinerary_request.dart';
 import 'package:smarttrip_ai/modules/ai_generation/screens/result_screen.dart';
 import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_page_layout.dart';
 import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_section_title.dart';
 import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_step_indicator.dart';
 
 class LoadingScreen extends StatefulWidget {
-  const LoadingScreen({super.key});
+  const LoadingScreen({super.key, required this.request});
+
+  final ItineraryRequest request;
 
   @override
   State<LoadingScreen> createState() => _LoadingScreenState();
@@ -38,7 +41,9 @@ class _LoadingScreenState extends State<LoadingScreen>
         return;
       }
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(builder: (_) => const ResultScreen()),
+        MaterialPageRoute<void>(
+          builder: (_) => ResultScreen(request: widget.request),
+        ),
       );
     });
   }

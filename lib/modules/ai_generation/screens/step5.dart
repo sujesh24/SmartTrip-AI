@@ -58,9 +58,7 @@ class _ItineraryFiveState extends State<ItineraryFive> {
 
     widget.request.budget = _budgetController.text.trim();
     FocusScope.of(context).unfocus();
-    Navigator.of(
-      context,
-    ).push(
+    Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => LoadingScreen(request: widget.request),
       ),
