@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_colors.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
 import 'package:smarttrip_ai/modules/ai_generation/models/interest_option.dart';
+import 'package:smarttrip_ai/modules/ai_generation/models/itinerary_request.dart';
 import 'package:smarttrip_ai/modules/ai_generation/screens/step5.dart';
 import 'package:smarttrip_ai/modules/ai_generation/viewmodels/itinerary_interest_view_model.dart';
 import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_page_layout.dart';
@@ -10,7 +11,9 @@ import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_section_tit
 import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_step_indicator.dart';
 
 class ItineraryFour extends StatefulWidget {
-  const ItineraryFour({super.key});
+  const ItineraryFour({super.key, required this.request});
+
+  final ItineraryRequest request;
 
   @override
   State<ItineraryFour> createState() => _ItineraryFourState();
@@ -72,9 +75,17 @@ class _ItineraryFourState extends State<ItineraryFour> {
       return;
     }
 
+    widget.request.interests = _viewModel.selectedOptions
+        .map((InterestOption option) => option.label)
+        .toList();
+
     Navigator.of(
       context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const ItineraryFive()));
+    ).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ItineraryFive(request: widget.request),
+      ),
+    );
   }
 }
 

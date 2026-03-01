@@ -15,6 +15,8 @@ class ItineraryInterestViewModel {
     _selected.add(option);
   }
 
+  List<InterestOption> get selectedOptions => _selected.toList();
+
   String? validateBeforeNext() {
     if (_selected.isEmpty) {
       return 'Please select at least one interest.';

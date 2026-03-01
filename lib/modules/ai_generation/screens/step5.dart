@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_colors.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
+import 'package:smarttrip_ai/modules/ai_generation/models/itinerary_request.dart';
 import 'package:smarttrip_ai/modules/ai_generation/screens/loading_screen.dart';
 import 'package:smarttrip_ai/modules/ai_generation/viewmodels/itinerary_budget_view_model.dart';
 import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_page_layout.dart';
@@ -10,7 +11,9 @@ import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_section_tit
 import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_step_indicator.dart';
 
 class ItineraryFive extends StatefulWidget {
-  const ItineraryFive({super.key});
+  const ItineraryFive({super.key, required this.request});
+
+  final ItineraryRequest request;
 
   @override
   State<ItineraryFive> createState() => _ItineraryFiveState();
@@ -53,10 +56,15 @@ class _ItineraryFiveState extends State<ItineraryFive> {
       return;
     }
 
+    widget.request.budget = _budgetController.text.trim();
     FocusScope.of(context).unfocus();
     Navigator.of(
       context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const LoadingScreen()));
+    ).push(
+      MaterialPageRoute<void>(
+        builder: (_) => LoadingScreen(request: widget.request),
+      ),
+    );
   }
 }
 

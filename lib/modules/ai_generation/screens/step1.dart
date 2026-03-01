@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_colors.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
+import 'package:smarttrip_ai/modules/ai_generation/models/itinerary_request.dart';
 import 'package:smarttrip_ai/modules/ai_generation/screens/step2.dart';
 import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_page_layout.dart';
 import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_primary_button.dart';
@@ -55,9 +56,15 @@ class _ItineraryOneState extends State<ItineraryOne> {
       return;
     }
 
+    final ItineraryRequest request = ItineraryRequest(destination: destination);
+
     Navigator.of(
       context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const ItineraryTwo()));
+    ).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ItineraryTwo(request: request),
+      ),
+    );
   }
 }
 

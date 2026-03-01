@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_colors.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
 import 'package:smarttrip_ai/modules/ai_generation/models/date_target.dart';
+import 'package:smarttrip_ai/modules/ai_generation/models/itinerary_request.dart';
 import 'package:smarttrip_ai/modules/ai_generation/screens/step3.dart';
 import 'package:smarttrip_ai/modules/ai_generation/viewmodels/itinerary_date_range_view_model.dart';
 import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_page_layout.dart';
@@ -10,7 +11,9 @@ import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_section_tit
 import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_step_indicator.dart';
 
 class ItineraryTwo extends StatefulWidget {
-  const ItineraryTwo({super.key});
+  const ItineraryTwo({super.key, required this.request});
+
+  final ItineraryRequest request;
 
   @override
   State<ItineraryTwo> createState() => _ItineraryTwoState();
@@ -114,13 +117,26 @@ class _ItineraryTwoState extends State<ItineraryTwo> {
       return;
     }
 
+    widget.request.startDate = _formatDate(_viewModel.fromDate!);
+    widget.request.endDate = _formatDate(_viewModel.toDate!);
+
     Navigator.of(
       context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const ItineraryThree()));
+    ).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ItineraryThree(request: widget.request),
+      ),
+    );
   }
 
   void _showValidationMessage(String message) {
     AppSnackBar.showError(context, message);
+  }
+
+  String _formatDate(DateTime date) {
+    final String month = date.month.toString().padLeft(2, '0');
+    final String day = date.day.toString().padLeft(2, '0');
+    return '${date.year}-$month-$day';
   }
 }
 

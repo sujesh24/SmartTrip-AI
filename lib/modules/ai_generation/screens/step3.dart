@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_colors.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
+import 'package:smarttrip_ai/modules/ai_generation/models/itinerary_request.dart';
 import 'package:smarttrip_ai/modules/ai_generation/screens/step4.dart';
 import 'package:smarttrip_ai/modules/ai_generation/models/travel_companion.dart';
 import 'package:smarttrip_ai/modules/ai_generation/viewmodels/itinerary_companion_view_model.dart';
@@ -10,7 +11,9 @@ import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_section_tit
 import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_step_indicator.dart';
 
 class ItineraryThree extends StatefulWidget {
-  const ItineraryThree({super.key});
+  const ItineraryThree({super.key, required this.request});
+
+  final ItineraryRequest request;
 
   @override
   State<ItineraryThree> createState() => _ItineraryThreeState();
@@ -70,9 +73,26 @@ class _ItineraryThreeState extends State<ItineraryThree> {
       return;
     }
 
+    widget.request.companion = _companionLabel(_viewModel.selectedCompanion!);
+
     Navigator.of(
       context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const ItineraryFour()));
+    ).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ItineraryFour(request: widget.request),
+      ),
+    );
+  }
+
+  String _companionLabel(TravelCompanion companion) {
+    switch (companion) {
+      case TravelCompanion.solo:
+        return 'Solo';
+      case TravelCompanion.friends:
+        return 'Friends';
+      case TravelCompanion.family:
+        return 'Family';
+    }
   }
 
   _CompanionTileStyle _styleFor(TravelCompanion companion) {

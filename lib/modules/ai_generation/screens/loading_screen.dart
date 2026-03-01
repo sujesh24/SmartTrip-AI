@@ -15,12 +15,24 @@ class LoadingScreen extends StatefulWidget {
   State<LoadingScreen> createState() => _LoadingScreenState();
 }
 
-class _LoadingScreenState extends State<LoadingScreen> {
+class _LoadingScreenState extends State<LoadingScreen>
+    with SingleTickerProviderStateMixin {
+  static const double _previewWidth = 150;
+  static const double _previewSpacing = 10;
+  static const double _previewHeight = 190;
+
   Timer? _timer;
+  late final AnimationController _marqueeController;
 
   @override
   void initState() {
     super.initState();
+
+    _marqueeController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 12),
+    )..repeat();
+
     _timer = Timer(const Duration(seconds: 3), () {
       if (!mounted) {
         return;
@@ -34,6 +46,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _marqueeController.dispose();
     super.dispose();
   }
 
@@ -58,21 +71,42 @@ class _LoadingScreenState extends State<LoadingScreen> {
           ),
           const SizedBox(height: 26),
           SizedBox(
-            height: 190,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: AppAssets.loadingPreviewImages.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
-              itemBuilder: (BuildContext context, int index) {
-                return ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: Image.asset(
-                    AppAssets.loadingPreviewImages[index],
-                    width: 150,
-                    fit: BoxFit.cover,
-                  ),
-                );
-              },
+            height: _previewHeight,
+            child: ClipRect(
+              child: LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  final int imageCount = AppAssets.loadingPreviewImages.length;
+                  final double stripWidth =
+                      (imageCount * _previewWidth) +
+                      ((imageCount - 1) * _previewSpacing);
+
+                  return AnimatedBuilder(
+                    animation: _marqueeController,
+                    builder: (BuildContext context, Widget? _) {
+                      final double dx = -_marqueeController.value * stripWidth;
+
+                      return Stack(
+                        children: <Widget>[
+                          Positioned(
+                            left: dx,
+                            top: 0,
+                            width: stripWidth,
+                            height: _previewHeight,
+                            child: _buildImageStrip(),
+                          ),
+                          Positioned(
+                            left: dx + stripWidth + _previewSpacing,
+                            top: 0,
+                            width: stripWidth,
+                            height: _previewHeight,
+                            child: _buildImageStrip(),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                },
+              ),
             ),
           ),
           const SizedBox(height: 28),
@@ -91,6 +125,30 @@ class _LoadingScreenState extends State<LoadingScreen> {
           const SizedBox(height: 14),
         ],
       ),
+    );
+  }
+
+  Widget _buildImageStrip() {
+    final int imageCount = AppAssets.loadingPreviewImages.length;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List<Widget>.generate(imageCount, (int index) {
+        final String imagePath = AppAssets.loadingPreviewImages[index];
+        return Padding(
+          padding: EdgeInsets.only(
+            right: index == imageCount - 1 ? 0 : _previewSpacing,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: Image.asset(
+              imagePath,
+              width: _previewWidth,
+              height: _previewHeight,
+              fit: BoxFit.cover,
+            ),
+          ),
+        );
+      }),
     );
   }
 }
