@@ -38,7 +38,7 @@ class _ResultScreenState extends State<ResultScreen> {
     final String destination = _safeDestination(widget.request.destination);
     final String companion = _safeCompanion(widget.request.companion);
     final String title = '$destination $companion Trip';
-    final String budgetLabel = '\$ ${_formatBudget(widget.request.budget)}';
+    final String budgetLabel = '\u20B9 ${_formatBudget(widget.request.budget)}';
     final String dateRangeLabel = _formatDateRange(
       widget.request.startDate,
       widget.request.endDate,
@@ -317,17 +317,33 @@ class _ResultScreenState extends State<ResultScreen> {
                 rawPlace['duration'],
           ) ??
           'Whole Day';
-      final String price =
+      final String price = _normalizePrice(
+        _asString(
+          rawPlace['price'] ??
+              rawPlace['cost'] ??
+              rawPlace['entryFee'] ??
+              rawPlace['entry_fee'],
+        ),
+      );
+      final String travelToNext =
           _asString(
-            rawPlace['price'] ??
-                rawPlace['cost'] ??
-                rawPlace['entryFee'] ??
-                rawPlace['entry_fee'],
+            rawPlace['travel_to_next'] ??
+                rawPlace['travelToNext'] ??
+                rawPlace['transfer_time'] ??
+                rawPlace['transferTime'] ??
+                rawPlace['nextTravelTime'] ??
+                rawPlace['time_to_next'],
           ) ??
-          r'$ Free';
+          _defaultTravelToNext(i, name);
 
       places.add(
-        _PlacePlan(name: name, rating: rating, timing: timing, price: price),
+        _PlacePlan(
+          name: name,
+          rating: rating,
+          timing: timing,
+          price: price,
+          travelToNext: travelToNext,
+        ),
       );
     }
 
@@ -392,6 +408,60 @@ class _ResultScreenState extends State<ResultScreen> {
     return parsed.toStringAsFixed(1);
   }
 
+  String _normalizePrice(String? input) {
+    if (input == null || input.trim().isEmpty) {
+      return 'Free';
+    }
+
+    String value = input.trim();
+    value = value.replaceAll('\$', '\u20B9');
+    value = value.replaceAll(RegExp('usd', caseSensitive: false), '\u20B9');
+    value = value.replaceAll(RegExp('dollars?', caseSensitive: false), '');
+    value = value.replaceAll(RegExp('rupees?', caseSensitive: false), '');
+    value = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    final RegExpMatch? numberMatch = RegExp(
+      r'\d[\d,]*\.?\d*',
+    ).firstMatch(value);
+    if (numberMatch != null) {
+      final String numberText = numberMatch.group(0)!.replaceAll(',', '');
+      final double? parsed = double.tryParse(numberText);
+      if (parsed != null && parsed == 0) {
+        return 'Free';
+      }
+    }
+
+    if (value.toLowerCase().contains('free')) {
+      return 'Free';
+    }
+
+    final bool hasRupee = value.contains('\u20B9');
+    if (!hasRupee) {
+      final RegExpMatch? number = RegExp(r'\d[\d,]*\.?\d*').firstMatch(value);
+      if (number != null) {
+        final String amount = number.group(0)!;
+        value = value.replaceFirst(amount, '\u20B9 $amount');
+      } else {
+        value = '\u20B9 $value';
+      }
+    }
+
+    return value;
+  }
+
+  String _defaultTravelToNext(int placeIndex, String seed) {
+    const List<String> values = <String>[
+      '12 mins',
+      '18 mins',
+      '9 mins',
+      '15 mins',
+      '20 mins',
+    ];
+    final int offset = seed.hashCode.abs() % values.length;
+    final int index = (placeIndex + offset) % values.length;
+    return values[index];
+  }
+
   List<_DayPlan> _buildFallbackDayPlans(ItineraryRequest request) {
     final DateTime now = DateTime.now();
     final String destination = _safeDestination(request.destination);
@@ -408,13 +478,15 @@ class _ResultScreenState extends State<ResultScreen> {
           name: '$destination Main Beach',
           rating: '4.4',
           timing: '09:00 - 12:00',
-          price: r'$ Free',
+          price: 'Free',
+          travelToNext: '14 mins',
         ),
         _PlacePlan(
           name: '$destination Old Town',
           rating: '4.5',
           timing: '13:00 - 18:00',
-          price: r'$ Free',
+          price: 'Free',
+          travelToNext: '16 mins',
         ),
       ],
       <_PlacePlan>[
@@ -422,13 +494,15 @@ class _ResultScreenState extends State<ResultScreen> {
           name: '$destination Fort',
           rating: '4.8',
           timing: '10:00 - 15:00',
-          price: r'$ 8 per person',
+          price: '\u20B9 800 per person',
+          travelToNext: '22 mins',
         ),
         _PlacePlan(
           name: '$destination Food Street',
           rating: '4.6',
           timing: '18:00 - 22:00',
-          price: r'$ 15 per person',
+          price: '\u20B9 1500 per person',
+          travelToNext: '11 mins',
         ),
       ],
       <_PlacePlan>[
@@ -436,13 +510,15 @@ class _ResultScreenState extends State<ResultScreen> {
           name: '$destination Market',
           rating: '4.8',
           timing: '10:00 - 14:00',
-          price: r'$ 5 per person',
+          price: '\u20B9 500 per person',
+          travelToNext: '13 mins',
         ),
         _PlacePlan(
           name: '$destination Sunset Point',
           rating: '4.5',
           timing: '16:30 - 19:00',
-          price: r'$ Free',
+          price: 'Free',
+          travelToNext: '17 mins',
         ),
       ],
       <_PlacePlan>[
@@ -450,13 +526,15 @@ class _ResultScreenState extends State<ResultScreen> {
           name: '$destination Museum',
           rating: '4.7',
           timing: '10:00 - 13:00',
-          price: r'$ 12 per person',
+          price: '\u20B9 1200 per person',
+          travelToNext: '10 mins',
         ),
         _PlacePlan(
           name: '$destination Night Walk',
           rating: '4.6',
           timing: '19:00 - 21:00',
-          price: r'$ 6 per person',
+          price: '\u20B9 600 per person',
+          travelToNext: '8 mins',
         ),
       ],
     ];
@@ -765,11 +843,14 @@ class _TimelinePlaceItem extends StatelessWidget {
                   ),
                 ),
                 if (showDivider)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 2),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
                     child: Text(
-                      '10 mins',
-                      style: TextStyle(color: Color(0xFF9AA0AD), fontSize: 12),
+                      place.travelToNext,
+                      style: const TextStyle(
+                        color: Color(0xFF9AA0AD),
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 if (showDivider)
@@ -872,11 +953,15 @@ class _PlaceCard extends StatelessWidget {
                         color: Color(0xFF1A223D),
                       ),
                       const SizedBox(width: 5),
-                      Text(
-                        place.timing,
-                        style: const TextStyle(
-                          color: Color(0xFF1A223D),
-                          fontSize: 12,
+                      Expanded(
+                        child: Text(
+                          place.timing,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF1A223D),
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                     ],
@@ -890,11 +975,15 @@ class _PlaceCard extends StatelessWidget {
                         color: Color(0xFF1A223D),
                       ),
                       const SizedBox(width: 5),
-                      Text(
-                        place.price,
-                        style: const TextStyle(
-                          color: Color(0xFF1A223D),
-                          fontSize: 12,
+                      Expanded(
+                        child: Text(
+                          place.price,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF1A223D),
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                     ],
@@ -951,12 +1040,14 @@ class _PlacePlan {
     required this.rating,
     required this.timing,
     required this.price,
+    required this.travelToNext,
   });
 
   final String name;
   final String rating;
   final String timing;
   final String price;
+  final String travelToNext;
 }
 
 class _DayChipData {

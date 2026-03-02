@@ -89,7 +89,7 @@ Trip details:
 - End date: ${request.endDate}
 - Companion: ${request.companion}
 - Interests: ${request.interests.join(', ')}
-- Budget: ${request.budget}
+- Budget (INR): \u20B9 ${request.budget}
 
 Output schema:
 {
@@ -102,7 +102,8 @@ Output schema:
           "name": "Place Name",
           "rating": "4.5",
           "timing": "10:00 - 12:00",
-          "price": "\$ 20 per person"
+          "price": "\u20B9 2000 per person",
+          "travel_to_next": "15 mins"
         }
       ]
     }
@@ -114,6 +115,8 @@ Rules:
 - Each day must have 2 to 4 places.
 - rating must be 1 decimal string (example: "4.6").
 - Keep timing and price short and practical.
+- All prices must be in INR and use \u20B9 symbol.
+- For each place (except the last in a day), include travel_to_next like "12 mins".
 - All places must be in/near ${request.destination}.
 - JSON must be parseable by jsonDecode.
 - Do not return markdown or code fences.

@@ -100,7 +100,7 @@ class _BudgetInputField extends StatelessWidget {
               ),
               alignment: Alignment.center,
               child: const Text(
-                '\$',
+                '\u20B9',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 14,
