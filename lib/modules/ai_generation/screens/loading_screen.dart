@@ -73,8 +73,15 @@ class _LoadingScreenState extends State<LoadingScreen>
   }
 
   String _buildPrompt(ItineraryRequest request) {
+    final DateTime? start = DateTime.tryParse(request.startDate);
+    final DateTime? end = DateTime.tryParse(request.endDate);
+    int totalDays = 1;
+    if (start != null && end != null && !end.isBefore(start)) {
+      totalDays = end.difference(start).inDays + 1;
+    }
+
     return '''
-Create a detailed travel itinerary plan in plain text.
+Create a travel itinerary and return ONLY valid JSON (no markdown, no extra text).
 
 Trip details:
 - Destination: ${request.destination}
@@ -84,11 +91,32 @@ Trip details:
 - Interests: ${request.interests.join(', ')}
 - Budget: ${request.budget}
 
-Output requirements:
-- Give a day-by-day plan.
-- Include suggested activities and food spots.
-- Keep it practical within budget.
-- Use simple readable sections.
+Output schema:
+{
+  "days": [
+    {
+      "day": 1,
+      "date": "YYYY-MM-DD",
+      "places": [
+        {
+          "name": "Place Name",
+          "rating": "4.5",
+          "timing": "10:00 - 12:00",
+          "price": "\$ 20 per person"
+        }
+      ]
+    }
+  ]
+}
+
+Rules:
+- Include exactly $totalDays days.
+- Each day must have 2 to 4 places.
+- rating must be 1 decimal string (example: "4.6").
+- Keep timing and price short and practical.
+- All places must be in/near ${request.destination}.
+- JSON must be parseable by jsonDecode.
+- Do not return markdown or code fences.
 ''';
   }
 

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_assets.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_colors.dart';
@@ -28,7 +30,7 @@ class _ResultScreenState extends State<ResultScreen> {
   @override
   void initState() {
     super.initState();
-    _dayPlans = _buildDayPlans(widget.request);
+    _dayPlans = _buildDayPlans(widget.request, widget.generatedText);
   }
 
   @override
@@ -48,7 +50,30 @@ class _ResultScreenState extends State<ResultScreen> {
               .toList();
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       backgroundColor: AppColors.lightBackground,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        automaticallyImplyLeading: false,
+        leading: IconButton(
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            }
+          },
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+        ),
+        actions: <Widget>[
+          IconButton(
+            onPressed: () {},
+            icon: const Icon(Icons.more_horiz, color: Colors.white),
+          ),
+        ],
+      ),
       body: Column(
         children: <Widget>[
           _ResultHeader(
@@ -146,78 +171,292 @@ class _ResultScreenState extends State<ResultScreen> {
           ...List<Widget>.generate(dayPlan.places.length, (int index) {
             final _PlacePlan place = dayPlan.places[index];
             final bool isLast = index == dayPlan.places.length - 1;
-            return _TimelinePlaceItem(
-              place: place,
-              showDivider: !isLast,
-            );
+            return _TimelinePlaceItem(place: place, showDivider: !isLast);
           }),
         ],
       ),
     );
   }
 
-  List<_DayPlan> _buildDayPlans(ItineraryRequest request) {
+  List<_DayPlan> _buildDayPlans(
+    ItineraryRequest request,
+    String generatedText,
+  ) {
+    final List<_DayPlan> parsed = _tryParseDayPlansFromResponse(
+      request,
+      generatedText,
+    );
+    if (parsed.isNotEmpty) {
+      parsed.sort(
+        (_DayPlan a, _DayPlan b) => a.dayNumber.compareTo(b.dayNumber),
+      );
+      return parsed;
+    }
+
+    return _buildFallbackDayPlans(request);
+  }
+
+  List<_DayPlan> _tryParseDayPlansFromResponse(
+    ItineraryRequest request,
+    String generatedText,
+  ) {
+    final Map<String, dynamic>? decoded = _decodeJsonMap(generatedText);
+    if (decoded == null) {
+      return <_DayPlan>[];
+    }
+
+    final dynamic rawDays =
+        decoded['days'] ?? decoded['itinerary'] ?? decoded['plan'];
+    if (rawDays is! List) {
+      return <_DayPlan>[];
+    }
+
+    final DateTime baseDate = _parseDate(request.startDate) ?? DateTime.now();
+    final String destination = _safeDestination(request.destination);
+    final List<_DayPlan> plans = <_DayPlan>[];
+
+    for (int i = 0; i < rawDays.length; i++) {
+      final dynamic rawDay = rawDays[i];
+      if (rawDay is! Map<String, dynamic>) {
+        continue;
+      }
+
+      final int dayNumber =
+          _asInt(rawDay['day'] ?? rawDay['dayNumber'] ?? rawDay['index']) ??
+          (i + 1);
+      final DateTime dayDate =
+          _asDate(rawDay['date']) ??
+          baseDate.add(Duration(days: dayNumber - 1));
+
+      final dynamic rawPlaces =
+          rawDay['places'] ??
+          rawDay['activities'] ??
+          rawDay['stops'] ??
+          rawDay['items'];
+      final List<_PlacePlan> places = _parsePlaces(rawPlaces, destination);
+      if (places.isEmpty) {
+        continue;
+      }
+
+      plans.add(_DayPlan(dayNumber: dayNumber, date: dayDate, places: places));
+    }
+
+    return plans;
+  }
+
+  Map<String, dynamic>? _decodeJsonMap(String source) {
+    final String trimmed = source.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+
+    final String withoutFence = trimmed
+        .replaceAll('```json', '')
+        .replaceAll('```', '')
+        .trim();
+
+    Map<String, dynamic>? map = _decodeAsMap(withoutFence);
+    if (map != null) {
+      return map;
+    }
+
+    final int firstBrace = withoutFence.indexOf('{');
+    final int lastBrace = withoutFence.lastIndexOf('}');
+    if (firstBrace == -1 || lastBrace <= firstBrace) {
+      return null;
+    }
+
+    final String jsonPart = withoutFence.substring(firstBrace, lastBrace + 1);
+    map = _decodeAsMap(jsonPart);
+    return map;
+  }
+
+  Map<String, dynamic>? _decodeAsMap(String rawJson) {
+    try {
+      final dynamic decoded = jsonDecode(rawJson);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      if (decoded is List) {
+        return <String, dynamic>{'days': decoded};
+      }
+    } catch (_) {
+      return null;
+    }
+    return null;
+  }
+
+  List<_PlacePlan> _parsePlaces(dynamic rawPlaces, String destination) {
+    if (rawPlaces is! List) {
+      return <_PlacePlan>[];
+    }
+
+    final List<_PlacePlan> places = <_PlacePlan>[];
+    for (int i = 0; i < rawPlaces.length; i++) {
+      final dynamic rawPlace = rawPlaces[i];
+      if (rawPlace is! Map<String, dynamic>) {
+        continue;
+      }
+
+      final String name =
+          _asString(
+            rawPlace['name'] ??
+                rawPlace['title'] ??
+                rawPlace['place'] ??
+                rawPlace['spot'],
+          ) ??
+          'Place ${i + 1} - $destination';
+      final String rating = _normalizeRating(
+        rawPlace['rating'] ?? rawPlace['score'] ?? rawPlace['stars'],
+      );
+      final String timing =
+          _asString(
+            rawPlace['timing'] ??
+                rawPlace['time'] ??
+                rawPlace['hours'] ??
+                rawPlace['duration'],
+          ) ??
+          'Whole Day';
+      final String price =
+          _asString(
+            rawPlace['price'] ??
+                rawPlace['cost'] ??
+                rawPlace['entryFee'] ??
+                rawPlace['entry_fee'],
+          ) ??
+          r'$ Free';
+
+      places.add(
+        _PlacePlan(name: name, rating: rating, timing: timing, price: price),
+      );
+    }
+
+    return places;
+  }
+
+  int? _asInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value.trim());
+    }
+    return null;
+  }
+
+  DateTime? _asDate(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is String) {
+      return _parseDate(value);
+    }
+    return null;
+  }
+
+  String? _asString(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    final String text = value.toString().trim();
+    if (text.isEmpty) {
+      return null;
+    }
+    return text;
+  }
+
+  String _normalizeRating(dynamic value) {
+    if (value == null) {
+      return '4.5';
+    }
+    if (value is num) {
+      return value.toDouble().toStringAsFixed(1);
+    }
+
+    final String text = value.toString().trim();
+    if (text.isEmpty) {
+      return '4.5';
+    }
+
+    final RegExpMatch? match = RegExp(r'\d+(\.\d+)?').firstMatch(text);
+    if (match == null) {
+      return '4.5';
+    }
+    final double? parsed = double.tryParse(match.group(0)!);
+    if (parsed == null) {
+      return '4.5';
+    }
+    return parsed.toStringAsFixed(1);
+  }
+
+  List<_DayPlan> _buildFallbackDayPlans(ItineraryRequest request) {
     final DateTime now = DateTime.now();
+    final String destination = _safeDestination(request.destination);
     final DateTime startDate = _parseDate(request.startDate) ?? now;
     final DateTime parsedEnd = _parseDate(request.endDate) ?? startDate;
-    final DateTime endDate = parsedEnd.isBefore(startDate) ? startDate : parsedEnd;
+    final DateTime endDate = parsedEnd.isBefore(startDate)
+        ? startDate
+        : parsedEnd;
     final int totalDays = endDate.difference(startDate).inDays + 1;
 
-    const List<List<_PlacePlan>> templates = <List<_PlacePlan>>[
+    final List<List<_PlacePlan>> templates = <List<_PlacePlan>>[
       <_PlacePlan>[
         _PlacePlan(
-          name: 'Tokyo Sky Tree',
+          name: '$destination Main Beach',
           rating: '4.4',
-          timing: '10:00 - 22:00',
-          price: r'$ 17.86 per person',
+          timing: '09:00 - 12:00',
+          price: r'$ Free',
         ),
         _PlacePlan(
-          name: 'Sensoji Temple',
+          name: '$destination Old Town',
           rating: '4.5',
-          timing: 'Whole Day',
+          timing: '13:00 - 18:00',
           price: r'$ Free',
         ),
       ],
       <_PlacePlan>[
         _PlacePlan(
-          name: 'Tokyo Disney Resort',
+          name: '$destination Fort',
           rating: '4.8',
-          timing: '08:00 - 22:00',
-          price: r'$ 200 per person',
+          timing: '10:00 - 15:00',
+          price: r'$ 8 per person',
         ),
         _PlacePlan(
-          name: 'Ueno Park',
+          name: '$destination Food Street',
           rating: '4.6',
-          timing: '09:00 - 20:00',
-          price: r'$ Free',
+          timing: '18:00 - 22:00',
+          price: r'$ 15 per person',
         ),
       ],
       <_PlacePlan>[
         _PlacePlan(
-          name: 'Ginza',
+          name: '$destination Market',
           rating: '4.8',
-          timing: 'Whole Day',
-          price: r'$ Free',
+          timing: '10:00 - 14:00',
+          price: r'$ 5 per person',
         ),
         _PlacePlan(
-          name: 'Shibuya',
+          name: '$destination Sunset Point',
           rating: '4.5',
-          timing: 'Whole Day',
+          timing: '16:30 - 19:00',
           price: r'$ Free',
         ),
       ],
       <_PlacePlan>[
         _PlacePlan(
-          name: 'Akihabara',
+          name: '$destination Museum',
           rating: '4.7',
-          timing: '11:00 - 21:00',
-          price: r'$ 10 per person',
+          timing: '10:00 - 13:00',
+          price: r'$ 12 per person',
         ),
         _PlacePlan(
-          name: 'Asakusa Street',
+          name: '$destination Night Walk',
           rating: '4.6',
-          timing: 'Whole Day',
-          price: r'$ Free',
+          timing: '19:00 - 21:00',
+          price: r'$ 6 per person',
         ),
       ],
     ];
@@ -226,13 +465,7 @@ class _ResultScreenState extends State<ResultScreen> {
     for (int i = 0; i < totalDays; i++) {
       final DateTime dayDate = startDate.add(Duration(days: i));
       final List<_PlacePlan> template = templates[i % templates.length];
-      result.add(
-        _DayPlan(
-          dayNumber: i + 1,
-          date: dayDate,
-          places: template,
-        ),
-      );
+      result.add(_DayPlan(dayNumber: i + 1, date: dayDate, places: template));
     }
     return result;
   }
@@ -357,8 +590,21 @@ class _ResultHeader extends StatelessWidget {
               bottomLeft: Radius.circular(18),
               bottomRight: Radius.circular(18),
             ),
-            child: Image.asset(AppAssets.itineraryHeader, fit: BoxFit.cover),
-            
+            child: Image.asset(
+              AppAssets.itineraryHeader,
+              fit: BoxFit.cover,
+              errorBuilder: (BuildContext context, Object _, StackTrace? __) {
+                return Container(
+                  color: const Color(0xFF2D3C34),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.image_not_supported_outlined,
+                    color: Colors.white70,
+                    size: 34,
+                  ),
+                );
+              },
+            ),
           ),
           Container(
             decoration: const BoxDecoration(
@@ -370,28 +616,6 @@ class _ResultHeader extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: <Color>[Color(0x2A000000), Color(0xA6000000)],
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  IconButton(
-                    onPressed: () {
-                      if (Navigator.canPop(context)) {
-                        Navigator.pop(context);
-                      }
-                    },
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
-                  ),
-                  IconButton(
-                    onPressed: () {},
-                    icon: const Icon(Icons.more_horiz, color: Colors.white),
-                  ),
-                ],
               ),
             ),
           ),
@@ -475,25 +699,22 @@ class _DayChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(7),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: selected ? selectedColor : unselectedColor,
-            borderRadius: BorderRadius.circular(7),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? Colors.white : const Color(0xFF575D6D),
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              fontStyle: FontStyle.italic,
-            ),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(7),
+      child: Ink(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? selectedColor : unselectedColor,
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : const Color(0xFF575D6D),
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            fontStyle: FontStyle.italic,
           ),
         ),
       ),
@@ -548,10 +769,7 @@ class _TimelinePlaceItem extends StatelessWidget {
                     padding: EdgeInsets.only(top: 2),
                     child: Text(
                       '10 mins',
-                      style: TextStyle(
-                        color: Color(0xFF9AA0AD),
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: Color(0xFF9AA0AD), fontSize: 12),
                     ),
                   ),
                 if (showDivider)

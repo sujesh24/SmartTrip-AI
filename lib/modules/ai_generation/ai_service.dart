@@ -44,6 +44,9 @@ class AiService {
           ],
         },
       ],
+      'generationConfig': <String, dynamic>{
+        'responseMimeType': 'application/json',
+      },
     };
 
     try {
