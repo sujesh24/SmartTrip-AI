@@ -1,6 +1,5 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:smarttrip_ai/modules/ai_generation/ai_service.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_assets.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_colors.dart';
 import 'package:smarttrip_ai/modules/ai_generation/models/itinerary_request.dart';
@@ -24,7 +23,7 @@ class _LoadingScreenState extends State<LoadingScreen>
   static const double _previewSpacing = 10;
   static const double _previewHeight = 190;
 
-  Timer? _timer;
+  final AiService _aiService = AiService();
   late final AnimationController _marqueeController;
 
   @override
@@ -35,24 +34,62 @@ class _LoadingScreenState extends State<LoadingScreen>
       vsync: this,
       duration: const Duration(seconds: 12),
     )..repeat();
-
-    _timer = Timer(const Duration(seconds: 3), () {
-      if (!mounted) {
-        return;
-      }
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(
-          builder: (_) => ResultScreen(request: widget.request),
-        ),
-      );
-    });
+    _generateAndNavigate();
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _aiService.dispose();
     _marqueeController.dispose();
     super.dispose();
+  }
+
+  Future<void> _generateAndNavigate() async {
+    final String prompt = _buildPrompt(widget.request);
+    String generatedText;
+
+    try {
+      final List<dynamic> results =
+          await Future.wait<dynamic>(<Future<dynamic>>[
+            _aiService.generateText(prompt),
+            Future<void>.delayed(const Duration(seconds: 3)),
+          ]);
+      generatedText = results[0] as String;
+    } catch (error) {
+      generatedText =
+          'Unable to generate trip plan right now.\n\nError: $error';
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            ResultScreen(request: widget.request, generatedText: generatedText),
+      ),
+    );
+  }
+
+  String _buildPrompt(ItineraryRequest request) {
+    return '''
+Create a detailed travel itinerary plan in plain text.
+
+Trip details:
+- Destination: ${request.destination}
+- Start date: ${request.startDate}
+- End date: ${request.endDate}
+- Companion: ${request.companion}
+- Interests: ${request.interests.join(', ')}
+- Budget: ${request.budget}
+
+Output requirements:
+- Give a day-by-day plan.
+- Include suggested activities and food spots.
+- Keep it practical within budget.
+- Use simple readable sections.
+''';
   }
 
   @override
