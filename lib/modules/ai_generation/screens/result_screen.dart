@@ -76,31 +76,41 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   Widget _buildDayTabs(String destination) {
-    final List<Widget> chips = <Widget>[
-      _DayChip(
+    final List<_DayChipData> chips = <_DayChipData>[
+      _DayChipData(
         label: 'All',
         selected: _selectedDay == 0,
         onTap: () => setState(() => _selectedDay = 0),
-        selectedColor: _accentNavy,
-        unselectedColor: _mutedChip,
       ),
     ];
 
     for (final _DayPlan dayPlan in _dayPlans) {
       chips.add(
-        _DayChip(
+        _DayChipData(
           label: 'Day ${dayPlan.dayNumber}: $destination',
           selected: _selectedDay == dayPlan.dayNumber,
           onTap: () => setState(() => _selectedDay = dayPlan.dayNumber),
-          selectedColor: _accentNavy,
-          unselectedColor: _mutedChip,
         ),
       );
     }
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(children: chips),
+    return SizedBox(
+      height: 42,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: chips.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 6),
+        itemBuilder: (BuildContext context, int index) {
+          final _DayChipData chip = chips[index];
+          return _DayChip(
+            label: chip.label,
+            selected: chip.selected,
+            onTap: chip.onTap,
+            selectedColor: _accentNavy,
+            unselectedColor: _mutedChip,
+          );
+        },
+      ),
     );
   }
 
@@ -116,12 +126,16 @@ class _ResultScreenState extends State<ResultScreen> {
             children: <Widget>[
               const _DayDot(),
               const SizedBox(width: 10),
-              Text(
-                'Day ${dayPlan.dayNumber} - $dayDate',
-                style: const TextStyle(
-                  color: Color(0xFF1A223D),
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
+              Expanded(
+                child: Text(
+                  'Day ${dayPlan.dayNumber} - $dayDate',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF1A223D),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               const SizedBox(width: 6),
@@ -344,6 +358,7 @@ class _ResultHeader extends StatelessWidget {
               bottomRight: Radius.circular(18),
             ),
             child: Image.asset(AppAssets.itineraryHeader, fit: BoxFit.cover),
+            
           ),
           Container(
             decoration: const BoxDecoration(
@@ -677,7 +692,20 @@ class _PlaceCard extends StatelessWidget {
               child: Image.asset(
                 AppAssets.resultPlaceholder,
                 width: 85,
+                height: double.infinity,
                 fit: BoxFit.cover,
+                errorBuilder: (BuildContext context, Object _, StackTrace? __) {
+                  return Container(
+                    width: 85,
+                    color: const Color(0xFFD2D6DD),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.image_not_supported_outlined,
+                      color: Color(0xFF7D8696),
+                      size: 20,
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -711,4 +739,16 @@ class _PlacePlan {
   final String rating;
   final String timing;
   final String price;
+}
+
+class _DayChipData {
+  const _DayChipData({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
 }
