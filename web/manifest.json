@@ -1,6 +1,6 @@
 {
-    "name": "smarttrip_ai",
-    "short_name": "smarttrip_ai",
+    "name": "PlanMyTrip AI",
+    "short_name": "PlanMyTrip AI",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

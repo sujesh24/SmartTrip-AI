@@ -24,8 +24,10 @@ class ResultViewModel {
   final String dateRangeLabel;
   final List<DayPlan> dayPlans;
 
+  // Combines destination and companion into a display title for the trip.
   String get title => '$destination $companion Trip';
 
+  // Returns all day plans or filters to a single day if a specific day is selected.
   List<DayPlan> visiblePlans(int selectedDay) {
     if (selectedDay == 0) {
       return dayPlans;
@@ -35,16 +37,19 @@ class ResultViewModel {
         .toList();
   }
 
+  // Builds the label text shown on each day chip.
   String dayChipLabel(DayPlan dayPlan) {
     return 'Day ${dayPlan.dayNumber}: $destination';
   }
 
+  // Formats a DateTime into a dd/mm/yyyy string for display.
   String formatDayDate(DateTime date) {
     final String day = date.day.toString().padLeft(2, '0');
     final String month = date.month.toString().padLeft(2, '0');
     return '$day/$month/${date.year}';
   }
 
+  // Entry point for building day plans: tries parsing AI response, falls back to templates if parsing fails.
   static List<DayPlan> _buildDayPlans(
     ItineraryRequest request,
     String generatedText,
@@ -62,6 +67,7 @@ class ResultViewModel {
     return _buildFallbackDayPlans(request, destination);
   }
 
+  // Attempts to parse a structured list of DayPlans from the AI-generated JSON response.
   static List<DayPlan> _tryParseDayPlansFromResponse(
     ItineraryRequest request,
     String generatedText,
@@ -91,7 +97,8 @@ class ResultViewModel {
           _asInt(rawDay['day'] ?? rawDay['dayNumber'] ?? rawDay['index']) ??
           (i + 1);
       final DateTime dayDate =
-          _asDate(rawDay['date']) ?? baseDate.add(Duration(days: dayNumber - 1));
+          _asDate(rawDay['date']) ??
+          baseDate.add(Duration(days: dayNumber - 1));
 
       final dynamic rawPlaces =
           rawDay['places'] ??
@@ -109,6 +116,7 @@ class ResultViewModel {
     return plans;
   }
 
+  // Cleans markdown fences from the AI response and decodes the JSON into a map.
   static Map<String, dynamic>? _decodeJsonMap(String source) {
     final String trimmed = source.trim();
     if (trimmed.isEmpty) {
@@ -135,6 +143,7 @@ class ResultViewModel {
     return _decodeAsMap(jsonPart);
   }
 
+  // Safely decodes a JSON string into a Map, wrapping bare lists under the 'days' key.
   static Map<String, dynamic>? _decodeAsMap(String rawJson) {
     try {
       final dynamic decoded = jsonDecode(rawJson);
@@ -150,6 +159,7 @@ class ResultViewModel {
     return null;
   }
 
+  // Converts a raw list of place objects from JSON into a typed list of PlacePlan models.
   static List<PlacePlan> _parsePlaces(dynamic rawPlaces, String destination) {
     if (rawPlaces is! List) {
       return <PlacePlan>[];
@@ -214,6 +224,7 @@ class ResultViewModel {
     return places;
   }
 
+  // Generates generic placeholder day plans when the AI response cannot be parsed.
   static List<DayPlan> _buildFallbackDayPlans(
     ItineraryRequest request,
     String destination,
@@ -302,6 +313,7 @@ class ResultViewModel {
     return result;
   }
 
+  // Safely casts a dynamic value (int, num, or String) to int.
   static int? _asInt(dynamic value) {
     if (value is int) {
       return value;
@@ -315,6 +327,7 @@ class ResultViewModel {
     return null;
   }
 
+  // Converts a dynamic string value to a DateTime using _parseDate.
   static DateTime? _asDate(dynamic value) {
     if (value is String) {
       return _parseDate(value);
@@ -322,6 +335,7 @@ class ResultViewModel {
     return null;
   }
 
+  // Converts any dynamic value to a trimmed String, returning null if empty.
   static String? _asString(dynamic value) {
     if (value == null) {
       return null;
@@ -330,6 +344,7 @@ class ResultViewModel {
     return text.isEmpty ? null : text;
   }
 
+  // Normalizes a rating value from various formats to a one-decimal string (e.g. "4.5").
   static String _normalizeRating(dynamic value) {
     if (value == null) {
       return '4.5';
@@ -355,6 +370,7 @@ class ResultViewModel {
     return parsed.toStringAsFixed(1);
   }
 
+  // Normalizes price strings to the ₹ format, replacing foreign currency symbols and handling 'Free'.
   static String _normalizePrice(String? input) {
     if (input == null || input.trim().isEmpty) {
       return 'Free';
@@ -367,9 +383,9 @@ class ResultViewModel {
     value = value.replaceAll(RegExp('rupees?', caseSensitive: false), '');
     value = value.replaceAll(RegExp(r'\s+'), ' ').trim();
 
-    final RegExpMatch? numberMatch = RegExp(r'\d[\d,]*\.?\d*').firstMatch(
-      value,
-    );
+    final RegExpMatch? numberMatch = RegExp(
+      r'\d[\d,]*\.?\d*',
+    ).firstMatch(value);
     if (numberMatch != null) {
       final String numberText = numberMatch.group(0)!.replaceAll(',', '');
       final double? parsed = double.tryParse(numberText);
@@ -395,6 +411,7 @@ class ResultViewModel {
     return value;
   }
 
+  // Returns a deterministic default travel-time string when none is provided in the AI response.
   static String _defaultTravelToNext(int placeIndex, String seed) {
     const List<String> values = <String>[
       '12 mins',
@@ -408,6 +425,7 @@ class ResultViewModel {
     return values[index];
   }
 
+  // Parses an ISO date string into a DateTime, returning null if blank or invalid.
   static DateTime? _parseDate(String value) {
     final String trimmed = value.trim();
     if (trimmed.isEmpty) {
@@ -416,6 +434,7 @@ class ResultViewModel {
     return DateTime.tryParse(trimmed);
   }
 
+  // Returns a title-cased destination name, falling back to 'Destination' if empty.
   static String _safeDestination(String value) {
     final String trimmed = value.trim();
     if (trimmed.isEmpty) {
@@ -424,6 +443,7 @@ class ResultViewModel {
     return _titleCase(trimmed);
   }
 
+  // Returns a title-cased companion label, falling back to 'Solo' if empty.
   static String _safeCompanion(String value) {
     final String trimmed = value.trim();
     if (trimmed.isEmpty) {
@@ -432,6 +452,7 @@ class ResultViewModel {
     return _titleCase(trimmed);
   }
 
+  // Formats a raw budget string into an Indian comma-separated number (e.g. "1,00,000").
   static String _formatBudget(String value) {
     final String digitsOnly = value.replaceAll(RegExp(r'[^0-9]'), '');
     if (digitsOnly.isEmpty) {
@@ -447,6 +468,7 @@ class ResultViewModel {
     return grouped.join(',').split('').reversed.join();
   }
 
+  // Builds a human-readable date range label like "Jan 5 to Jan 10".
   static String _formatDateRange(String startRaw, String endRaw) {
     final DateTime? start = _parseDate(startRaw);
     final DateTime? end = _parseDate(endRaw);
@@ -459,6 +481,7 @@ class ResultViewModel {
     return '$startLabel to $endLabel';
   }
 
+  // Formats a DateTime to a short "Mon D" string (e.g. "Jan 5").
   static String _shortMonthDay(DateTime date) {
     const List<String> months = <String>[
       'Jan',
@@ -477,6 +500,7 @@ class ResultViewModel {
     return '${months[date.month - 1]} ${date.day}';
   }
 
+  // Converts a string to title case (first letter of each word capitalized).
   static String _titleCase(String input) {
     final List<String> words = input
         .split(RegExp(r'\s+'))
