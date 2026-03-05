@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_colors.dart';
 import 'package:smarttrip_ai/modules/ai_generation/models/day_plan.dart';
 import 'package:smarttrip_ai/modules/ai_generation/models/itinerary_request.dart';
+import 'package:smarttrip_ai/modules/ai_generation/models/place_plan.dart';
 import 'package:smarttrip_ai/modules/ai_generation/viewmodels/result_view_model.dart';
 import 'package:smarttrip_ai/modules/ai_generation/widgets/result/result_day_chip.dart';
 import 'package:smarttrip_ai/modules/ai_generation/widgets/result/result_day_section.dart';
 import 'package:smarttrip_ai/modules/ai_generation/widgets/result/result_header.dart';
+import 'package:smarttrip_ai/modules/external_api/image_service.dart';
 
 class ResultScreen extends StatefulWidget {
   const ResultScreen({
@@ -26,6 +28,8 @@ class _ResultScreenState extends State<ResultScreen> {
   static const Color _mutedChip = Color(0xFFB9BDC3);
 
   late final ResultViewModel _viewModel;
+  final ImageService _imageService = ImageService();
+  late List<DayPlan> _dayPlans;
   int _selectedDay = 0;
 
   @override
@@ -35,11 +39,23 @@ class _ResultScreenState extends State<ResultScreen> {
       request: widget.request,
       generatedText: widget.generatedText,
     );
+    _dayPlans = _viewModel.dayPlans;
+    _loadPlaceImages();
+  }
+
+  @override
+  void dispose() {
+    _imageService.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<DayPlan> visiblePlans = _viewModel.visiblePlans(_selectedDay);
+    final List<DayPlan> visiblePlans = _selectedDay == 0
+        ? _dayPlans
+        : _dayPlans
+              .where((DayPlan dayPlan) => dayPlan.dayNumber == _selectedDay)
+              .toList();
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -108,7 +124,7 @@ class _ResultScreenState extends State<ResultScreen> {
       ),
     ];
 
-    for (final DayPlan dayPlan in _viewModel.dayPlans) {
+    for (final DayPlan dayPlan in _dayPlans) {
       chips.add(
         ResultDayChip(
           label: _viewModel.dayChipLabel(dayPlan),
@@ -129,5 +145,45 @@ class _ResultScreenState extends State<ResultScreen> {
         itemBuilder: (BuildContext context, int index) => chips[index],
       ),
     );
+  }
+
+  Future<void> _loadPlaceImages() async {
+    final List<DayPlan> sourcePlans = _dayPlans;
+    if (sourcePlans.isEmpty) {
+      return;
+    }
+
+    final List<DayPlan> enrichedPlans = <DayPlan>[];
+    for (final DayPlan dayPlan in sourcePlans) {
+      final List<Future<PlacePlan>> placeFutures = dayPlan.places
+          .map((PlacePlan place) => _enrichPlaceWithImage(place))
+          .toList();
+      final List<PlacePlan> enrichedPlaces = await Future.wait(placeFutures);
+      enrichedPlans.add(dayPlan.copyWith(places: enrichedPlaces));
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _dayPlans = enrichedPlans;
+    });
+  }
+
+  Future<PlacePlan> _enrichPlaceWithImage(PlacePlan place) async {
+    if (place.imageUrl != null && place.imageUrl!.trim().isNotEmpty) {
+      return place;
+    }
+
+    final String? imageUrl = await _imageService.fetchPlaceImageUrl(
+      placeName: place.name,
+      destination: _viewModel.destination,
+    );
+    if (imageUrl == null || imageUrl.trim().isEmpty) {
+      return place;
+    }
+
+    return place.copyWith(imageUrl: imageUrl);
   }
 }

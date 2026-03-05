@@ -10,7 +10,7 @@ class ResultViewModel {
     required String generatedText,
   }) : destination = _safeDestination(request.destination),
        companion = _safeCompanion(request.companion),
-       budgetLabel = '₹ ${_formatBudget(request.budget)}',
+       budgetLabel = '\u20B9 ${_formatBudget(request.budget)}',
        dateRangeLabel = _formatDateRange(request.startDate, request.endDate),
        dayPlans = _buildDayPlans(
          request,
@@ -24,10 +24,8 @@ class ResultViewModel {
   final String dateRangeLabel;
   final List<DayPlan> dayPlans;
 
-  // Combines destination and companion into a display title for the trip.
   String get title => '$destination $companion Trip';
 
-  // Returns all day plans or filters to a single day if a specific day is selected.
   List<DayPlan> visiblePlans(int selectedDay) {
     if (selectedDay == 0) {
       return dayPlans;
@@ -37,19 +35,16 @@ class ResultViewModel {
         .toList();
   }
 
-  // Builds the label text shown on each day chip.
   String dayChipLabel(DayPlan dayPlan) {
     return 'Day ${dayPlan.dayNumber}: $destination';
   }
 
-  // Formats a DateTime into a dd/mm/yyyy string for display.
   String formatDayDate(DateTime date) {
     final String day = date.day.toString().padLeft(2, '0');
     final String month = date.month.toString().padLeft(2, '0');
     return '$day/$month/${date.year}';
   }
 
-  // Entry point for building day plans: tries parsing AI response, falls back to templates if parsing fails.
   static List<DayPlan> _buildDayPlans(
     ItineraryRequest request,
     String generatedText,
@@ -67,7 +62,6 @@ class ResultViewModel {
     return _buildFallbackDayPlans(request, destination);
   }
 
-  // Attempts to parse a structured list of DayPlans from the AI-generated JSON response.
   static List<DayPlan> _tryParseDayPlansFromResponse(
     ItineraryRequest request,
     String generatedText,
@@ -116,7 +110,6 @@ class ResultViewModel {
     return plans;
   }
 
-  // Cleans markdown fences from the AI response and decodes the JSON into a map.
   static Map<String, dynamic>? _decodeJsonMap(String source) {
     final String trimmed = source.trim();
     if (trimmed.isEmpty) {
@@ -143,7 +136,6 @@ class ResultViewModel {
     return _decodeAsMap(jsonPart);
   }
 
-  // Safely decodes a JSON string into a Map, wrapping bare lists under the 'days' key.
   static Map<String, dynamic>? _decodeAsMap(String rawJson) {
     try {
       final dynamic decoded = jsonDecode(rawJson);
@@ -159,7 +151,6 @@ class ResultViewModel {
     return null;
   }
 
-  // Converts a raw list of place objects from JSON into a typed list of PlacePlan models.
   static List<PlacePlan> _parsePlaces(dynamic rawPlaces, String destination) {
     if (rawPlaces is! List) {
       return <PlacePlan>[];
@@ -209,6 +200,12 @@ class ResultViewModel {
                 rawPlace['time_to_next'],
           ) ??
           _defaultTravelToNext(i, name);
+      final String? imageUrl = _asString(
+        rawPlace['imageUrl'] ??
+            rawPlace['image_url'] ??
+            rawPlace['image'] ??
+            rawPlace['photo'],
+      );
 
       places.add(
         PlacePlan(
@@ -217,6 +214,7 @@ class ResultViewModel {
           timing: timing,
           price: price,
           travelToNext: travelToNext,
+          imageUrl: imageUrl,
         ),
       );
     }
@@ -224,7 +222,6 @@ class ResultViewModel {
     return places;
   }
 
-  // Generates generic placeholder day plans when the AI response cannot be parsed.
   static List<DayPlan> _buildFallbackDayPlans(
     ItineraryRequest request,
     String destination,
@@ -259,14 +256,14 @@ class ResultViewModel {
           name: '$destination Fort',
           rating: '4.8',
           timing: '10:00 - 15:00',
-          price: '₹ 800 per person',
+          price: '\u20B9 800 per person',
           travelToNext: '22 mins',
         ),
         PlacePlan(
           name: '$destination Food Street',
           rating: '4.6',
           timing: '18:00 - 22:00',
-          price: '₹ 1500 per person',
+          price: '\u20B9 1500 per person',
           travelToNext: '11 mins',
         ),
       ],
@@ -275,7 +272,7 @@ class ResultViewModel {
           name: '$destination Market',
           rating: '4.8',
           timing: '10:00 - 14:00',
-          price: '₹ 500 per person',
+          price: '\u20B9 500 per person',
           travelToNext: '13 mins',
         ),
         PlacePlan(
@@ -291,14 +288,14 @@ class ResultViewModel {
           name: '$destination Museum',
           rating: '4.7',
           timing: '10:00 - 13:00',
-          price: '₹ 1200 per person',
+          price: '\u20B9 1200 per person',
           travelToNext: '10 mins',
         ),
         PlacePlan(
           name: '$destination Night Walk',
           rating: '4.6',
           timing: '19:00 - 21:00',
-          price: '₹ 600 per person',
+          price: '\u20B9 600 per person',
           travelToNext: '8 mins',
         ),
       ],
@@ -313,7 +310,6 @@ class ResultViewModel {
     return result;
   }
 
-  // Safely casts a dynamic value (int, num, or String) to int.
   static int? _asInt(dynamic value) {
     if (value is int) {
       return value;
@@ -327,7 +323,6 @@ class ResultViewModel {
     return null;
   }
 
-  // Converts a dynamic string value to a DateTime using _parseDate.
   static DateTime? _asDate(dynamic value) {
     if (value is String) {
       return _parseDate(value);
@@ -335,7 +330,6 @@ class ResultViewModel {
     return null;
   }
 
-  // Converts any dynamic value to a trimmed String, returning null if empty.
   static String? _asString(dynamic value) {
     if (value == null) {
       return null;
@@ -344,7 +338,6 @@ class ResultViewModel {
     return text.isEmpty ? null : text;
   }
 
-  // Normalizes a rating value from various formats to a one-decimal string (e.g. "4.5").
   static String _normalizeRating(dynamic value) {
     if (value == null) {
       return '4.5';
@@ -370,15 +363,14 @@ class ResultViewModel {
     return parsed.toStringAsFixed(1);
   }
 
-  // Normalizes price strings to the ₹ format, replacing foreign currency symbols and handling 'Free'.
   static String _normalizePrice(String? input) {
     if (input == null || input.trim().isEmpty) {
       return 'Free';
     }
 
     String value = input.trim();
-    value = value.replaceAll('\$', '₹');
-    value = value.replaceAll(RegExp('usd', caseSensitive: false), '₹');
+    value = value.replaceAll('\$', '\u20B9');
+    value = value.replaceAll(RegExp('usd', caseSensitive: false), '\u20B9');
     value = value.replaceAll(RegExp('dollars?', caseSensitive: false), '');
     value = value.replaceAll(RegExp('rupees?', caseSensitive: false), '');
     value = value.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -398,20 +390,19 @@ class ResultViewModel {
       return 'Free';
     }
 
-    if (!value.contains('₹')) {
+    if (!value.contains('\u20B9')) {
       final RegExpMatch? number = RegExp(r'\d[\d,]*\.?\d*').firstMatch(value);
       if (number != null) {
         final String amount = number.group(0)!;
-        value = value.replaceFirst(amount, '₹ $amount');
+        value = value.replaceFirst(amount, '\u20B9 $amount');
       } else {
-        value = '₹ $value';
+        value = '\u20B9 $value';
       }
     }
 
     return value;
   }
 
-  // Returns a deterministic default travel-time string when none is provided in the AI response.
   static String _defaultTravelToNext(int placeIndex, String seed) {
     const List<String> values = <String>[
       '12 mins',
@@ -425,7 +416,6 @@ class ResultViewModel {
     return values[index];
   }
 
-  // Parses an ISO date string into a DateTime, returning null if blank or invalid.
   static DateTime? _parseDate(String value) {
     final String trimmed = value.trim();
     if (trimmed.isEmpty) {
@@ -434,7 +424,6 @@ class ResultViewModel {
     return DateTime.tryParse(trimmed);
   }
 
-  // Returns a title-cased destination name, falling back to 'Destination' if empty.
   static String _safeDestination(String value) {
     final String trimmed = value.trim();
     if (trimmed.isEmpty) {
@@ -443,7 +432,6 @@ class ResultViewModel {
     return _titleCase(trimmed);
   }
 
-  // Returns a title-cased companion label, falling back to 'Solo' if empty.
   static String _safeCompanion(String value) {
     final String trimmed = value.trim();
     if (trimmed.isEmpty) {
@@ -452,7 +440,6 @@ class ResultViewModel {
     return _titleCase(trimmed);
   }
 
-  // Formats a raw budget string into an Indian comma-separated number (e.g. "1,00,000").
   static String _formatBudget(String value) {
     final String digitsOnly = value.replaceAll(RegExp(r'[^0-9]'), '');
     if (digitsOnly.isEmpty) {
@@ -468,7 +455,6 @@ class ResultViewModel {
     return grouped.join(',').split('').reversed.join();
   }
 
-  // Builds a human-readable date range label like "Jan 5 to Jan 10".
   static String _formatDateRange(String startRaw, String endRaw) {
     final DateTime? start = _parseDate(startRaw);
     final DateTime? end = _parseDate(endRaw);
@@ -481,7 +467,6 @@ class ResultViewModel {
     return '$startLabel to $endLabel';
   }
 
-  // Formats a DateTime to a short "Mon D" string (e.g. "Jan 5").
   static String _shortMonthDay(DateTime date) {
     const List<String> months = <String>[
       'Jan',
@@ -500,7 +485,6 @@ class ResultViewModel {
     return '${months[date.month - 1]} ${date.day}';
   }
 
-  // Converts a string to title case (first letter of each word capitalized).
   static String _titleCase(String input) {
     final List<String> words = input
         .split(RegExp(r'\s+'))

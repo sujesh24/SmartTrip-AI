@@ -112,28 +112,46 @@ class ResultPlaceCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(0, 6, 6, 6),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(6),
-              child: Image.asset(
-                AppAssets.resultPlaceholder,
-                width: 85,
-                height: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (BuildContext context, Object _, StackTrace? __) {
-                  return Container(
-                    width: 85,
-                    color: const Color(0xFFD2D6DD),
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.image_not_supported_outlined,
-                      color: Color(0xFF7D8696),
-                      size: 20,
-                    ),
-                  );
-                },
-              ),
+              child: _buildPlaceImage(),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPlaceImage() {
+    final String? imageUrl = place.imageUrl;
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      return Image.network(
+        imageUrl,
+        width: 85,
+        height: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _buildAssetFallback(),
+      );
+    }
+    return _buildAssetFallback();
+  }
+
+  Widget _buildAssetFallback() {
+    return Image.asset(
+      AppAssets.resultPlaceholder,
+      width: 85,
+      height: double.infinity,
+      fit: BoxFit.cover,
+      errorBuilder: (BuildContext context, Object _, StackTrace? __) {
+        return Container(
+          width: 85,
+          color: const Color(0xFFD2D6DD),
+          alignment: Alignment.center,
+          child: const Icon(
+            Icons.image_not_supported_outlined,
+            color: Color(0xFF7D8696),
+            size: 20,
+          ),
+        );
+      },
     );
   }
 }

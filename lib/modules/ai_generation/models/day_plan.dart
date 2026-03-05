@@ -10,4 +10,16 @@ class DayPlan {
   final int dayNumber;
   final DateTime date;
   final List<PlacePlan> places;
+
+  DayPlan copyWith({
+    int? dayNumber,
+    DateTime? date,
+    List<PlacePlan>? places,
+  }) {
+    return DayPlan(
+      dayNumber: dayNumber ?? this.dayNumber,
+      date: date ?? this.date,
+      places: places ?? this.places,
+    );
+  }
 }
