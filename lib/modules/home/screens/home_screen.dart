@@ -16,7 +16,7 @@ class _HomeScreenState extends State<HomeScreen>
   bool _isPopupOpen = false;
   bool _isOpeningPopup = false;
 
-  static const Duration _homeIconSpinDuration = Duration(milliseconds: 260);
+  static const Duration _homeIconSpinDuration = Duration(milliseconds: 240);
 
   @override
   void initState() {
@@ -164,26 +164,12 @@ class _HomeBottomNavigationBar extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 260),
-                        switchInCurve: Curves.easeInOutCubic,
-                        switchOutCurve: Curves.easeInOutCubic,
-                        transitionBuilder:
-                            (Widget child, Animation<double> animation) {
-                              return RotationTransition(
-                                turns: Tween<double>(
-                                  begin: 0.8,
-                                  end: 1,
-                                ).animate(animation),
-                                child: FadeTransition(
-                                  opacity: animation,
-                                  child: child,
-                                ),
-                              );
-                            },
-                        child: Icon(
-                          isPopupOpen ? Icons.close : Icons.add,
-                          key: ValueKey<bool>(isPopupOpen),
+                      child: AnimatedRotation(
+                        turns: isPopupOpen ? 0.125 : 0,
+                        duration: _HomeScreenState._homeIconSpinDuration,
+                        curve: Curves.easeInOutCubic,
+                        child: const Icon(
+                          Icons.add,
                           color: Colors.white,
                           size: 40,
                         ),
