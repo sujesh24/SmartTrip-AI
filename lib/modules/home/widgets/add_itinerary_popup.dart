@@ -1,15 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_colors.dart';
 
-class AddItineraryPopup extends StatelessWidget {
+class AddItineraryPopup extends StatefulWidget {
   const AddItineraryPopup({
     super.key,
     required this.onCreatePressed,
     required this.onClosePressed,
   });
 
-  final VoidCallback onCreatePressed;
-  final VoidCallback onClosePressed;
+  final Future<void> Function() onCreatePressed;
+  final Future<void> Function() onClosePressed;
+
+  @override
+  State<AddItineraryPopup> createState() => _AddItineraryPopupState();
+}
+
+class _AddItineraryPopupState extends State<AddItineraryPopup> {
+  static const Duration _closeIconSpinDuration = Duration(milliseconds: 240);
+  double _closeIconTurns = 0;
+  bool _isClosing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _closeIconTurns = 0.125);
+    });
+  }
+
+  Future<void> _closeWithSpin() async {
+    if (_isClosing) {
+      return;
+    }
+
+    setState(() {
+      _isClosing = true;
+      _closeIconTurns = 0;
+    });
+    await Future<void>.delayed(_closeIconSpinDuration);
+    await widget.onClosePressed();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +81,7 @@ class AddItineraryPopup extends StatelessWidget {
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton.icon(
-                  onPressed: onCreatePressed,
+                  onPressed: _isClosing ? null : widget.onCreatePressed,
                   icon: const Icon(
                     Icons.lightbulb_outline,
                     color: Colors.white,
@@ -75,7 +108,7 @@ class AddItineraryPopup extends StatelessWidget {
               ),
               const SizedBox(height: 44),
               InkWell(
-                onTap: onClosePressed,
+                onTap: _isClosing ? null : _closeWithSpin,
                 borderRadius: BorderRadius.circular(40),
                 child: Container(
                   width: 56,
@@ -91,7 +124,16 @@ class AddItineraryPopup extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: const Icon(Icons.close, color: Colors.white, size: 34),
+                  child: AnimatedRotation(
+                    turns: _closeIconTurns,
+                    duration: _closeIconSpinDuration,
+                    curve: Curves.easeInOutCubic,
+                    child: const Icon(
+                      Icons.add,
+                      color: Colors.white,
+                      size: 34,
+                    ),
+                  ),
                 ),
               ),
             ],

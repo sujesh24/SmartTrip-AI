@@ -10,26 +10,80 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _popupAnimationController;
+  bool _isPopupOpen = false;
+  bool _isOpeningPopup = false;
+
+  static const Duration _homeIconSpinDuration = Duration(milliseconds: 260);
+
+  @override
+  void initState() {
+    super.initState();
+    _popupAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+      reverseDuration: const Duration(milliseconds: 320),
+    );
+  }
+
+  @override
+  void dispose() {
+    _popupAnimationController.dispose();
+    super.dispose();
+  }
+
   Future<void> _showAddPopup() async {
+    if (_isPopupOpen || _isOpeningPopup) {
+      return;
+    }
+
+    setState(() {
+      _isPopupOpen = true;
+      _isOpeningPopup = true;
+    });
+    await Future<void>.delayed(_homeIconSpinDuration);
+    if (!mounted) {
+      return;
+    }
+
     final NavigatorState navigator = Navigator.of(context);
 
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      transitionAnimationController: _popupAnimationController,
       builder: (BuildContext sheetContext) {
         return AddItineraryPopup(
-          onCreatePressed: () {
-            Navigator.of(sheetContext).pop();
+          onCreatePressed: () async {
+            await _dismissPopup(sheetContext);
+            if (!mounted) {
+              return;
+            }
             navigator.push(
               MaterialPageRoute<void>(builder: (_) => const ItineraryOne()),
             );
           },
-          onClosePressed: () => Navigator.of(sheetContext).pop(),
+          onClosePressed: () => _dismissPopup(sheetContext),
         );
       },
     );
+
+    if (mounted) {
+      setState(() {
+        _isPopupOpen = false;
+        _isOpeningPopup = false;
+      });
+    }
+  }
+
+  Future<void> _dismissPopup(BuildContext sheetContext) async {
+    if (mounted && _isPopupOpen) {
+      setState(() => _isPopupOpen = false);
+    }
+    Navigator.of(sheetContext).pop();
   }
 
   @override
@@ -47,15 +101,22 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: _HomeBottomNavigationBar(onAddPressed: _showAddPopup),
+      bottomNavigationBar: _HomeBottomNavigationBar(
+        onAddPressed: _showAddPopup,
+        isPopupOpen: _isPopupOpen,
+      ),
     );
   }
 }
 
 class _HomeBottomNavigationBar extends StatelessWidget {
-  const _HomeBottomNavigationBar({required this.onAddPressed});
+  const _HomeBottomNavigationBar({
+    required this.onAddPressed,
+    required this.isPopupOpen,
+  });
 
   final VoidCallback onAddPressed;
+  final bool isPopupOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -103,7 +164,30 @@ class _HomeBottomNavigationBar extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.add, color: Colors.white, size: 40),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 260),
+                        switchInCurve: Curves.easeInOutCubic,
+                        switchOutCurve: Curves.easeInOutCubic,
+                        transitionBuilder:
+                            (Widget child, Animation<double> animation) {
+                              return RotationTransition(
+                                turns: Tween<double>(
+                                  begin: 0.8,
+                                  end: 1,
+                                ).animate(animation),
+                                child: FadeTransition(
+                                  opacity: animation,
+                                  child: child,
+                                ),
+                              );
+                            },
+                        child: Icon(
+                          isPopupOpen ? Icons.close : Icons.add,
+                          key: ValueKey<bool>(isPopupOpen),
+                          color: Colors.white,
+                          size: 40,
+                        ),
+                      ),
                     ),
                   ),
                 ),
