@@ -7,11 +7,13 @@ class ResultTimelineItem extends StatelessWidget {
     super.key,
     required this.place,
     required this.showDivider,
+    required this.showImageSkeleton,
     this.timelineLineColor = const Color(0xFFB7BCC2),
   });
 
   final PlacePlan place;
   final bool showDivider;
+  final bool showImageSkeleton;
   final Color timelineLineColor;
 
   @override
@@ -48,7 +50,10 @@ class ResultTimelineItem extends StatelessWidget {
             Expanded(
               child: Column(
                 children: <Widget>[
-                  ResultPlaceCard(place: place),
+                  ResultPlaceCard(
+                    place: place,
+                    showImageSkeleton: showImageSkeleton,
+                  ),
                   if (showDivider)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 10),

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:smarttrip_ai/modules/ai_generation/screens/step1.dart';
+import 'package:smarttrip_ai/modules/home/screens/home_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -12,7 +12,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'PlanMyTrip AI',
-      home: const ItineraryOne(),
+      home: const HomeScreen(),
       debugShowCheckedModeBanner: false,
     );
   }

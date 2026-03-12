@@ -7,10 +7,12 @@ class ResultDaySection extends StatelessWidget {
     super.key,
     required this.dayPlan,
     required this.formattedDate,
+    required this.showImageSkeleton,
   });
 
   final DayPlan dayPlan;
   final String formattedDate;
+  final bool showImageSkeleton;
 
   @override
   Widget build(BuildContext context) {
@@ -45,6 +47,7 @@ class ResultDaySection extends StatelessWidget {
             return ResultTimelineItem(
               place: dayPlan.places[index],
               showDivider: !isLast,
+              showImageSkeleton: showImageSkeleton,
             );
           }),
         ],

@@ -3,9 +3,14 @@ import 'package:smarttrip_ai/modules/ai_generation/common/app_assets.dart';
 import 'package:smarttrip_ai/modules/ai_generation/models/place_plan.dart';
 
 class ResultPlaceCard extends StatelessWidget {
-  const ResultPlaceCard({super.key, required this.place});
+  const ResultPlaceCard({
+    super.key,
+    required this.place,
+    required this.showImageSkeleton,
+  });
 
   final PlacePlan place;
+  final bool showImageSkeleton;
 
   @override
   Widget build(BuildContext context) {
@@ -128,10 +133,28 @@ class ResultPlaceCard extends StatelessWidget {
         width: 85,
         height: double.infinity,
         fit: BoxFit.cover,
+        loadingBuilder:
+            (
+              BuildContext context,
+              Widget child,
+              ImageChunkEvent? loadingProgress,
+            ) {
+              if (loadingProgress == null) {
+                return child;
+              }
+              return _buildImageSkeleton();
+            },
         errorBuilder: (_, __, ___) => _buildAssetFallback(),
       );
     }
+    if (showImageSkeleton) {
+      return _buildImageSkeleton();
+    }
     return _buildAssetFallback();
+  }
+
+  Widget _buildImageSkeleton() {
+    return const _PulsingImageSkeleton(width: 85);
   }
 
   Widget _buildAssetFallback() {
@@ -150,6 +173,48 @@ class ResultPlaceCard extends StatelessWidget {
             color: Color(0xFF7D8696),
             size: 20,
           ),
+        );
+      },
+    );
+  }
+}
+
+class _PulsingImageSkeleton extends StatefulWidget {
+  const _PulsingImageSkeleton({required this.width});
+
+  final double width;
+
+  @override
+  State<_PulsingImageSkeleton> createState() => _PulsingImageSkeletonState();
+}
+
+class _PulsingImageSkeletonState extends State<_PulsingImageSkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  late final Animation<Color?> _color = ColorTween(
+    begin: const Color(0xFFE1E5EA),
+    end: const Color(0xFFF1F3F6),
+  ).animate(_controller);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _color,
+      builder: (BuildContext context, Widget? child) {
+        return Container(
+          width: widget.width,
+          height: double.infinity,
+          color: _color.value,
         );
       },
     );

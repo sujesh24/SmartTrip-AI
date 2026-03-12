@@ -30,6 +30,7 @@ class _ResultScreenState extends State<ResultScreen> {
   late final ResultViewModel _viewModel;
   final ImageService _imageService = ImageService();
   late List<DayPlan> _dayPlans;
+  bool _isLoadingPlaceImages = false;
   int _selectedDay = 0;
 
   @override
@@ -102,6 +103,7 @@ class _ResultScreenState extends State<ResultScreen> {
                     return ResultDaySection(
                       dayPlan: dayPlan,
                       formattedDate: _viewModel.formatDayDate(dayPlan.date),
+                      showImageSkeleton: _isLoadingPlaceImages,
                     );
                   }),
                 ],
@@ -153,22 +155,45 @@ class _ResultScreenState extends State<ResultScreen> {
       return;
     }
 
-    final List<DayPlan> enrichedPlans = <DayPlan>[];
-    for (final DayPlan dayPlan in sourcePlans) {
-      final List<Future<PlacePlan>> placeFutures = dayPlan.places
-          .map((PlacePlan place) => _enrichPlaceWithImage(place))
-          .toList();
-      final List<PlacePlan> enrichedPlaces = await Future.wait(placeFutures);
-      enrichedPlans.add(dayPlan.copyWith(places: enrichedPlaces));
-    }
-
-    if (!mounted) {
+    final bool hasMissingImages = sourcePlans.any(
+      (DayPlan dayPlan) => dayPlan.places.any(
+        (PlacePlan place) => (place.imageUrl ?? '').trim().isEmpty,
+      ),
+    );
+    if (!hasMissingImages) {
       return;
     }
 
-    setState(() {
-      _dayPlans = enrichedPlans;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoadingPlaceImages = true;
+      });
+    }
+
+    try {
+      final List<DayPlan> enrichedPlans = <DayPlan>[];
+      for (final DayPlan dayPlan in sourcePlans) {
+        final List<Future<PlacePlan>> placeFutures = dayPlan.places
+            .map((PlacePlan place) => _enrichPlaceWithImage(place))
+            .toList();
+        final List<PlacePlan> enrichedPlaces = await Future.wait(placeFutures);
+        enrichedPlans.add(dayPlan.copyWith(places: enrichedPlaces));
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _dayPlans = enrichedPlans;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingPlaceImages = false;
+        });
+      }
+    }
   }
 
   Future<PlacePlan> _enrichPlaceWithImage(PlacePlan place) async {
