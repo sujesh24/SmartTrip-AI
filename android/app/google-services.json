@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "802865466863",
+    "project_id": "smart-trip-ai-19f3f",
+    "storage_bucket": "smart-trip-ai-19f3f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:802865466863:android:2d69609b516d429c29fa1a",
+        "android_client_info": {
+          "package_name": "com.example.smarttrip_ai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCLnTvpJq-FHB5v0dHP3VNypqAhpwNXGvs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

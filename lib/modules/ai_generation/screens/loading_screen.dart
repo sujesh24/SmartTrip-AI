@@ -118,6 +118,11 @@ Rules:
 - All prices must be in INR and use \u20B9 symbol.
 - For each place (except the last in a day), include travel_to_next like "12 mins".
 - All places must be in/near ${request.destination}.
+- Do not repeat the same place name across different days.
+- Place names must be real, specific attractions (proper nouns), not generic labels.
+- Never output placeholders like "${request.destination} Market", "${request.destination} Beach", "${request.destination} Hall", "Old Town", "Food Street", or "Sunset Point".
+- If destination is a country (for example "China"), pick real places from major cities in that country and include city context, e.g. "Forbidden City (Beijing)".
+- Do not invent fake place names.
 - JSON must be parseable by jsonDecode.
 - Do not return markdown or code fences.
 ''';

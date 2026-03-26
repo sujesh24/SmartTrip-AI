@@ -57,7 +57,7 @@ class ResultViewModel {
     );
     if (parsed.isNotEmpty) {
       parsed.sort((DayPlan a, DayPlan b) => a.dayNumber.compareTo(b.dayNumber));
-      return parsed;
+      return _ensureUniquePlacesAcrossTrip(parsed, destination);
     }
     return _buildFallbackDayPlans(request, destination);
   }
@@ -159,52 +159,57 @@ class ResultViewModel {
     final List<PlacePlan> places = <PlacePlan>[];
     for (int i = 0; i < rawPlaces.length; i++) {
       final dynamic rawPlace = rawPlaces[i];
-      if (rawPlace is! Map<String, dynamic>) {
+      final Map<String, dynamic>? rawPlaceMap = _asMap(rawPlace);
+
+      final String? rawName = rawPlaceMap == null
+          ? _asString(rawPlace)
+          : _asString(
+              rawPlaceMap['name'] ??
+                  rawPlaceMap['title'] ??
+                  rawPlaceMap['place'] ??
+                  rawPlaceMap['spot'],
+            );
+      final String name = _normalizePlaceName(
+        rawName ?? 'Top Attraction ${i + 1}',
+      );
+      if (_isLowQualityPlaceName(name, destination)) {
         continue;
       }
 
-      final String name =
-          _asString(
-            rawPlace['name'] ??
-                rawPlace['title'] ??
-                rawPlace['place'] ??
-                rawPlace['spot'],
-          ) ??
-          'Place ${i + 1} - $destination';
       final String rating = _normalizeRating(
-        rawPlace['rating'] ?? rawPlace['score'] ?? rawPlace['stars'],
+        rawPlaceMap?['rating'] ?? rawPlaceMap?['score'] ?? rawPlaceMap?['stars'],
       );
       final String timing =
           _asString(
-            rawPlace['timing'] ??
-                rawPlace['time'] ??
-                rawPlace['hours'] ??
-                rawPlace['duration'],
+            rawPlaceMap?['timing'] ??
+                rawPlaceMap?['time'] ??
+                rawPlaceMap?['hours'] ??
+                rawPlaceMap?['duration'],
           ) ??
           'Whole Day';
       final String price = _normalizePrice(
         _asString(
-          rawPlace['price'] ??
-              rawPlace['cost'] ??
-              rawPlace['entryFee'] ??
-              rawPlace['entry_fee'],
+          rawPlaceMap?['price'] ??
+              rawPlaceMap?['cost'] ??
+              rawPlaceMap?['entryFee'] ??
+              rawPlaceMap?['entry_fee'],
         ),
       );
       final String travelToNext =
           _asString(
-            rawPlace['travel_to_next'] ??
-                rawPlace['travelToNext'] ??
-                rawPlace['transfer_time'] ??
-                rawPlace['transferTime'] ??
-                rawPlace['nextTravelTime'] ??
-                rawPlace['time_to_next'],
+            rawPlaceMap?['travel_to_next'] ??
+                rawPlaceMap?['travelToNext'] ??
+                rawPlaceMap?['transfer_time'] ??
+                rawPlaceMap?['transferTime'] ??
+                rawPlaceMap?['nextTravelTime'] ??
+                rawPlaceMap?['time_to_next'],
           ) ??
-          _defaultTravelToNext(i, name);
+          _defaultTravelToNext(places.length, name);
       final String? imageUrl = _asString(
-        rawPlace['imageUrl'] ??
-            rawPlace['image_url'] ??
-            rawPlace['image'] ??
-            rawPlace['photo'],
+        rawPlaceMap?['imageUrl'] ??
+            rawPlaceMap?['image_url'] ??
+            rawPlaceMap?['image'] ??
+            rawPlaceMap?['photo'],
       );
 
       places.add(
@@ -233,81 +238,318 @@ class ResultViewModel {
         ? startDate
         : parsedEnd;
     final int totalDays = endDate.difference(startDate).inDays + 1;
-
-    final List<List<PlacePlan>> templates = <List<PlacePlan>>[
-      <PlacePlan>[
-        PlacePlan(
-          name: '$destination Main Beach',
-          rating: '4.4',
-          timing: '09:00 - 12:00',
-          price: 'Free',
-          travelToNext: '14 mins',
-        ),
-        PlacePlan(
-          name: '$destination Old Town',
-          rating: '4.5',
-          timing: '13:00 - 18:00',
-          price: 'Free',
-          travelToNext: '16 mins',
-        ),
-      ],
-      <PlacePlan>[
-        PlacePlan(
-          name: '$destination Fort',
-          rating: '4.8',
-          timing: '10:00 - 15:00',
-          price: '\u20B9 800 per person',
-          travelToNext: '22 mins',
-        ),
-        PlacePlan(
-          name: '$destination Food Street',
-          rating: '4.6',
-          timing: '18:00 - 22:00',
-          price: '\u20B9 1500 per person',
-          travelToNext: '11 mins',
-        ),
-      ],
-      <PlacePlan>[
-        PlacePlan(
-          name: '$destination Market',
-          rating: '4.8',
-          timing: '10:00 - 14:00',
-          price: '\u20B9 500 per person',
-          travelToNext: '13 mins',
-        ),
-        PlacePlan(
-          name: '$destination Sunset Point',
-          rating: '4.5',
-          timing: '16:30 - 19:00',
-          price: 'Free',
-          travelToNext: '17 mins',
-        ),
-      ],
-      <PlacePlan>[
-        PlacePlan(
-          name: '$destination Museum',
-          rating: '4.7',
-          timing: '10:00 - 13:00',
-          price: '\u20B9 1200 per person',
-          travelToNext: '10 mins',
-        ),
-        PlacePlan(
-          name: '$destination Night Walk',
-          rating: '4.6',
-          timing: '19:00 - 21:00',
-          price: '\u20B9 600 per person',
-          travelToNext: '8 mins',
-        ),
-      ],
-    ];
+    final List<PlacePlan> placePool = _fallbackPlacePoolForDestination(
+      destination,
+    );
 
     final List<DayPlan> result = <DayPlan>[];
     for (int i = 0; i < totalDays; i++) {
       final DateTime dayDate = startDate.add(Duration(days: i));
-      final List<PlacePlan> template = templates[i % templates.length];
-      result.add(DayPlan(dayNumber: i + 1, date: dayDate, places: template));
+      final int firstIndex = (i * 2) % placePool.length;
+      final int secondIndex = (firstIndex + 1) % placePool.length;
+      final int thirdIndex = (firstIndex + 2) % placePool.length;
+
+      final List<PlacePlan> daySeeds = <PlacePlan>[
+        placePool[firstIndex],
+        placePool[secondIndex],
+        if (totalDays == 1 || i.isEven) placePool[thirdIndex],
+      ];
+
+      final List<PlacePlan> dayPlaces = List<PlacePlan>.generate(
+        daySeeds.length,
+        (int index) {
+          final PlacePlan source = daySeeds[index];
+          return source.copyWith(
+            travelToNext: _defaultTravelToNext(index, source.name),
+          );
+        },
+      );
+
+      result.add(DayPlan(dayNumber: i + 1, date: dayDate, places: dayPlaces));
     }
+    return _ensureUniquePlacesAcrossTrip(result, destination);
+  }
+
+  static List<DayPlan> _ensureUniquePlacesAcrossTrip(
+    List<DayPlan> plans,
+    String destination,
+  ) {
+    final List<PlacePlan> fallbackPool = _fallbackPlacePoolForDestination(
+      destination,
+    );
+    final Set<String> usedAcrossTrip = <String>{};
+    int fallbackCursor = 0;
+
+    final List<DayPlan> result = <DayPlan>[];
+    for (final DayPlan dayPlan in plans) {
+      final int targetCount = dayPlan.places.length.clamp(2, 4) as int;
+      final Set<String> usedInDay = <String>{};
+      final List<PlacePlan> uniquePlaces = <PlacePlan>[];
+
+      for (final PlacePlan place in dayPlan.places) {
+        final String cleanName = _normalizePlaceName(place.name);
+        final String key = _placeIdentityKey(cleanName);
+        if (key.isEmpty) {
+          continue;
+        }
+        if (usedInDay.contains(key) || usedAcrossTrip.contains(key)) {
+          continue;
+        }
+
+        uniquePlaces.add(place.copyWith(name: cleanName));
+        usedInDay.add(key);
+        usedAcrossTrip.add(key);
+        if (uniquePlaces.length >= targetCount) {
+          break;
+        }
+      }
+
+      int attempts = 0;
+      while (uniquePlaces.length < targetCount && attempts < fallbackPool.length) {
+        final PlacePlan seed = fallbackPool[fallbackCursor % fallbackPool.length];
+        fallbackCursor++;
+        attempts++;
+
+        final String key = _placeIdentityKey(seed.name);
+        if (key.isEmpty ||
+            usedInDay.contains(key) ||
+            usedAcrossTrip.contains(key)) {
+          continue;
+        }
+
+        uniquePlaces.add(seed);
+        usedInDay.add(key);
+        usedAcrossTrip.add(key);
+      }
+
+      if (uniquePlaces.isEmpty) {
+        continue;
+      }
+
+      final List<PlacePlan> normalizedTravelPlaces = List<PlacePlan>.generate(
+        uniquePlaces.length,
+        (int index) {
+          final PlacePlan source = uniquePlaces[index];
+          if (index == uniquePlaces.length - 1) {
+            return source;
+          }
+
+          final String travelToNext = source.travelToNext.trim().isEmpty
+              ? _defaultTravelToNext(index, source.name)
+              : source.travelToNext;
+          return source.copyWith(travelToNext: travelToNext);
+        },
+      );
+
+      result.add(
+        DayPlan(
+          dayNumber: dayPlan.dayNumber,
+          date: dayPlan.date,
+          places: normalizedTravelPlaces,
+        ),
+      );
+    }
+
     return result;
+  }
+
+  static List<PlacePlan> _fallbackPlacePoolForDestination(String destination) {
+    final String lookup = _normalizeLookup(destination);
+
+    if (lookup.contains('japan') || lookup.contains('japn')) {
+      return const <PlacePlan>[
+        PlacePlan(
+          name: 'Senso-ji Temple (Tokyo)',
+          rating: '4.7',
+          timing: '09:00 - 11:30',
+          price: 'Free',
+          travelToNext: '',
+        ),
+        PlacePlan(
+          name: 'Tokyo Skytree (Tokyo)',
+          rating: '4.6',
+          timing: '12:30 - 15:00',
+          price: '\u20B9 1,300 per person',
+          travelToNext: '',
+        ),
+        PlacePlan(
+          name: 'Meiji Jingu Shrine (Tokyo)',
+          rating: '4.7',
+          timing: '16:00 - 18:00',
+          price: 'Free',
+          travelToNext: '',
+        ),
+        PlacePlan(
+          name: 'Fushimi Inari Taisha (Kyoto)',
+          rating: '4.8',
+          timing: '08:30 - 11:30',
+          price: 'Free',
+          travelToNext: '',
+        ),
+        PlacePlan(
+          name: 'Kiyomizu-dera Temple (Kyoto)',
+          rating: '4.7',
+          timing: '13:00 - 15:30',
+          price: '\u20B9 300 per person',
+          travelToNext: '',
+        ),
+        PlacePlan(
+          name: 'Arashiyama Bamboo Grove (Kyoto)',
+          rating: '4.6',
+          timing: '16:00 - 18:00',
+          price: 'Free',
+          travelToNext: '',
+        ),
+        PlacePlan(
+          name: 'Osaka Castle (Osaka)',
+          rating: '4.6',
+          timing: '09:30 - 12:00',
+          price: '\u20B9 350 per person',
+          travelToNext: '',
+        ),
+        PlacePlan(
+          name: 'Dotonbori (Osaka)',
+          rating: '4.6',
+          timing: '17:00 - 20:00',
+          price: 'Free',
+          travelToNext: '',
+        ),
+        PlacePlan(
+          name: 'Nara Park (Nara)',
+          rating: '4.7',
+          timing: '10:00 - 13:00',
+          price: 'Free',
+          travelToNext: '',
+        ),
+        PlacePlan(
+          name: 'Todai-ji Temple (Nara)',
+          rating: '4.7',
+          timing: '14:00 - 16:30',
+          price: '\u20B9 450 per person',
+          travelToNext: '',
+        ),
+        PlacePlan(
+          name: 'Hiroshima Peace Memorial Park (Hiroshima)',
+          rating: '4.7',
+          timing: '09:30 - 12:00',
+          price: 'Free',
+          travelToNext: '',
+        ),
+        PlacePlan(
+          name: 'Itsukushima Shrine (Miyajima)',
+          rating: '4.8',
+          timing: '14:00 - 17:00',
+          price: '\u20B9 350 per person',
+          travelToNext: '',
+        ),
+      ];
+    }
+
+    if (lookup.contains('china')) {
+      return const <PlacePlan>[
+        PlacePlan(
+          name: 'Forbidden City (Beijing)',
+          rating: '4.8',
+          timing: '09:00 - 12:00',
+          price: '\u20B9 700 per person',
+          travelToNext: '',
+        ),
+        PlacePlan(
+          name: 'Mutianyu Great Wall (Beijing)',
+          rating: '4.8',
+          timing: '13:30 - 17:00',
+          price: '\u20B9 1,600 per person',
+          travelToNext: '',
+        ),
+        PlacePlan(
+          name: 'Temple of Heaven (Beijing)',
+          rating: '4.7',
+          timing: '09:00 - 11:30',
+          price: '\u20B9 400 per person',
+          travelToNext: '',
+        ),
+        PlacePlan(
+          name: 'Summer Palace (Beijing)',
+          rating: '4.7',
+          timing: '14:00 - 17:30',
+          price: '\u20B9 500 per person',
+          travelToNext: '',
+        ),
+        PlacePlan(
+          name: 'The Bund (Shanghai)',
+          rating: '4.7',
+          timing: '17:00 - 20:00',
+          price: 'Free',
+          travelToNext: '',
+        ),
+        PlacePlan(
+          name: 'Yu Garden (Shanghai)',
+          rating: '4.6',
+          timing: '10:00 - 13:00',
+          price: '\u20B9 350 per person',
+          travelToNext: '',
+        ),
+        PlacePlan(
+          name: 'Terracotta Army Museum (Xi\'an)',
+          rating: '4.8',
+          timing: '09:30 - 13:30',
+          price: '\u20B9 1,100 per person',
+          travelToNext: '',
+        ),
+        PlacePlan(
+          name: 'West Lake (Hangzhou)',
+          rating: '4.7',
+          timing: '15:00 - 18:30',
+          price: 'Free',
+          travelToNext: '',
+        ),
+      ];
+    }
+
+    return const <PlacePlan>[
+      PlacePlan(
+        name: 'Historic City Center',
+        rating: '4.6',
+        timing: '09:00 - 12:00',
+        price: 'Free',
+        travelToNext: '',
+      ),
+      PlacePlan(
+        name: 'National Museum',
+        rating: '4.7',
+        timing: '13:00 - 16:00',
+        price: '\u20B9 500 per person',
+        travelToNext: '',
+      ),
+      PlacePlan(
+        name: 'Riverside Promenade',
+        rating: '4.5',
+        timing: '17:00 - 19:00',
+        price: 'Free',
+        travelToNext: '',
+      ),
+      PlacePlan(
+        name: 'Central Art District',
+        rating: '4.6',
+        timing: '10:30 - 13:00',
+        price: '\u20B9 700 per person',
+        travelToNext: '',
+      ),
+      PlacePlan(
+        name: 'Botanical Garden',
+        rating: '4.6',
+        timing: '14:30 - 17:30',
+        price: '\u20B9 400 per person',
+        travelToNext: '',
+      ),
+      PlacePlan(
+        name: 'Panorama Viewpoint',
+        rating: '4.5',
+        timing: '18:00 - 20:00',
+        price: 'Free',
+        travelToNext: '',
+      ),
+    ];
   }
 
   static int? _asInt(dynamic value) {
@@ -336,6 +578,95 @@ class ResultViewModel {
     }
     final String text = value.toString().trim();
     return text.isEmpty ? null : text;
+  }
+
+  static Map<String, dynamic>? _asMap(dynamic value) {
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+    if (value is Map) {
+      final Map<String, dynamic> converted = <String, dynamic>{};
+      for (final MapEntry<dynamic, dynamic> entry in value.entries) {
+        converted[entry.key.toString()] = entry.value;
+      }
+      return converted;
+    }
+    return null;
+  }
+
+  static String _normalizePlaceName(String value) {
+    String normalized = value.trim();
+    normalized = normalized.replaceAll(RegExp(r'^[\-\*\s]+'), '');
+    normalized = normalized.replaceAll(RegExp(r'^\d+[\)\.\-\s]+'), '');
+    normalized = normalized.replaceAll(RegExp(r'\s+'), ' ');
+    return normalized;
+  }
+
+  static String _placeIdentityKey(String name) {
+    String normalized = name.toLowerCase();
+    normalized = normalized.replaceAll(RegExp(r'\(.*?\)'), ' ');
+    normalized = normalized.replaceAll(RegExp(r'[^a-z0-9\s]'), ' ');
+    normalized = normalized.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return normalized;
+  }
+
+  static bool _isLowQualityPlaceName(String name, String destination) {
+    final String normalizedName = _normalizeLookup(name);
+    if (normalizedName.isEmpty) {
+      return true;
+    }
+
+    if (normalizedName.startsWith('place ') ||
+        normalizedName.startsWith('spot ') ||
+        normalizedName.startsWith('location ')) {
+      return true;
+    }
+
+    final String normalizedDestination = _normalizeLookup(destination);
+    if (normalizedDestination.isEmpty) {
+      return false;
+    }
+
+    if (normalizedName == normalizedDestination) {
+      return true;
+    }
+
+    if (!normalizedName.startsWith('$normalizedDestination ')) {
+      return false;
+    }
+
+    final String suffix = normalizedName
+        .substring(normalizedDestination.length)
+        .trim();
+    if (suffix.isEmpty) {
+      return true;
+    }
+
+    const Set<String> genericSuffixes = <String>{
+      'market',
+      'beach',
+      'hall',
+      'old town',
+      'food street',
+      'fort',
+      'museum',
+      'night walk',
+      'sunset point',
+      'city center',
+      'downtown',
+      'park',
+      'viewpoint',
+      'view point',
+    };
+    return genericSuffixes.contains(suffix);
+  }
+
+  static String _normalizeLookup(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
   }
 
   static String _normalizeRating(dynamic value) {
