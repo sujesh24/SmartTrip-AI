@@ -29,7 +29,7 @@ class AuthTextField extends StatelessWidget {
           style: const TextStyle(
             color: AppColors.primaryGreen,
             fontFamily: 'Times New Roman',
-            fontSize: 31,
+            fontSize: 16,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -43,7 +43,7 @@ class AuthTextField extends StatelessWidget {
             style: const TextStyle(
               color: AppColors.primaryGreen,
               fontFamily: 'Times New Roman',
-              fontSize: 30,
+              fontSize: 16,
               fontWeight: FontWeight.w500,
             ),
             decoration: InputDecoration(
@@ -51,10 +51,13 @@ class AuthTextField extends StatelessWidget {
               hintStyle: TextStyle(
                 color: AppColors.primaryGreen.withValues(alpha: 0.45),
                 fontFamily: 'Times New Roman',
-                fontSize: 30,
+                fontSize: 16,
                 fontWeight: FontWeight.w500,
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
               suffixIcon: trailing == null
                   ? null
                   : IconButton(

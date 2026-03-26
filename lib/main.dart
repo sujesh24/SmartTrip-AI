@@ -1,7 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/firebase_options.dart';
-import 'package:smarttrip_ai/modules/home/screens/home_screen.dart';
+import 'package:smarttrip_ai/modules/user/screens/signup_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,7 +16,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'PlanMyTrip AI',
-      home: const HomeScreen(),
+      home: const SignupScreen(),
       debugShowCheckedModeBanner: false,
     );
   }

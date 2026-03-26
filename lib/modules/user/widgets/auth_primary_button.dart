@@ -30,7 +30,7 @@ class AuthPrimaryButton extends StatelessWidget {
           label,
           style: const TextStyle(
             fontFamily: 'Times New Roman',
-            fontSize: 33,
+            fontSize: 25,
             fontWeight: FontWeight.w600,
           ),
         ),

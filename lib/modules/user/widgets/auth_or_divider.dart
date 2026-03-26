@@ -21,7 +21,7 @@ class AuthOrDivider extends StatelessWidget {
             style: TextStyle(
               color: AppColors.primaryGreen.withValues(alpha: 0.9),
               fontFamily: 'Times New Roman',
-              fontSize: 29,
+              fontSize: 16,
               fontWeight: FontWeight.w500,
             ),
           ),

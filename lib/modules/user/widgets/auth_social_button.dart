@@ -21,10 +21,7 @@ class AuthSocialButton extends StatelessWidget {
       child: OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
-          side: const BorderSide(
-            color: AppColors.borderGreen,
-            width: 1.4,
-          ),
+          side: const BorderSide(color: AppColors.borderGreen, width: 1.4),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(17),
           ),
@@ -39,7 +36,7 @@ class AuthSocialButton extends StatelessWidget {
               style: const TextStyle(
                 color: AppColors.primaryGreen,
                 fontFamily: 'Times New Roman',
-                fontSize: 30,
+                fontSize: 16,
                 fontWeight: FontWeight.w600,
               ),
             ),
