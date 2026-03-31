@@ -10,6 +10,10 @@ class AuthTextField extends StatelessWidget {
     this.obscureText = false,
     this.trailing,
     this.onTrailingTap,
+    this.keyboardType,
+    this.autofillHints,
+    this.textInputAction,
+    this.enabled = true,
   });
 
   final String label;
@@ -18,6 +22,10 @@ class AuthTextField extends StatelessWidget {
   final bool obscureText;
   final Widget? trailing;
   final VoidCallback? onTrailingTap;
+  final TextInputType? keyboardType;
+  final Iterable<String>? autofillHints;
+  final TextInputAction? textInputAction;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +47,10 @@ class AuthTextField extends StatelessWidget {
           child: TextField(
             controller: controller,
             obscureText: obscureText,
+            keyboardType: keyboardType,
+            autofillHints: autofillHints,
+            textInputAction: textInputAction,
+            enabled: enabled,
             cursorColor: AppColors.primaryGreen,
             style: const TextStyle(
               color: AppColors.primaryGreen,
@@ -61,7 +73,7 @@ class AuthTextField extends StatelessWidget {
               suffixIcon: trailing == null
                   ? null
                   : IconButton(
-                      onPressed: onTrailingTap,
+                      onPressed: enabled ? onTrailingTap : null,
                       splashRadius: 20,
                       icon: trailing!,
                     ),

@@ -12,7 +12,20 @@
           "package_name": "com.example.smarttrip_ai"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "802865466863-u543k1tdkvf98ji1re3qmv1bhhrhvq81.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.smarttrip_ai",
+            "certificate_hash": "bf3b9f53a9f523397513a055fcb9e5495c4acc36"
+          }
+        },
+        {
+          "client_id": "802865466863-b9gnonkl0kdk82cif0f310sfioj30u39.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCLnTvpJq-FHB5v0dHP3VNypqAhpwNXGvs"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "802865466863-b9gnonkl0kdk82cif0f310sfioj30u39.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "802865466863-si6uecibhtc9rta79jlufa7i8khg5nvi.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.smarttripAi"
+              }
+            }
+          ]
         }
       }
     }

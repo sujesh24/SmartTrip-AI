@@ -7,11 +7,13 @@ class AuthSocialButton extends StatelessWidget {
     required this.label,
     required this.leading,
     required this.onPressed,
+    this.isLoading = false,
   });
 
   final String label;
   final Widget leading;
   final VoidCallback onPressed;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -19,29 +21,38 @@ class AuthSocialButton extends StatelessWidget {
       width: double.infinity,
       height: 56,
       child: OutlinedButton(
-        onPressed: onPressed,
+        onPressed: isLoading ? null : onPressed,
         style: OutlinedButton.styleFrom(
           side: const BorderSide(color: AppColors.borderGreen, width: 1.4),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(17),
           ),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            SizedBox(width: 30, child: Center(child: leading)),
-            const SizedBox(width: 10),
-            Text(
-              label,
-              style: const TextStyle(
-                color: AppColors.primaryGreen,
-                fontFamily: 'Times New Roman',
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+        child: isLoading
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  color: AppColors.borderGreen,
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  SizedBox(width: 30, child: Center(child: leading)),
+                  const SizedBox(width: 10),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: AppColors.primaryGreen,
+                      fontFamily: 'Times New Roman',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }

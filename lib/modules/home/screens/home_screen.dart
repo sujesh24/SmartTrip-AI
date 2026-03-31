@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_colors.dart';
 import 'package:smarttrip_ai/modules/ai_generation/screens/step1.dart';
 import 'package:smarttrip_ai/modules/home/widgets/add_itinerary_popup.dart';
+import 'package:smarttrip_ai/modules/user/screens/signup_screen.dart';
+import 'package:smarttrip_ai/modules/user/services/auth_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,9 +15,11 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
+  final AuthService _authService = AuthService();
   late final AnimationController _popupAnimationController;
   bool _isPopupOpen = false;
   bool _isOpeningPopup = false;
+  bool _isSigningOut = false;
 
   static const Duration _homeIconSpinDuration = Duration(milliseconds: 240);
 
@@ -86,10 +91,54 @@ class _HomeScreenState extends State<HomeScreen>
     Navigator.of(sheetContext).pop();
   }
 
+  Future<void> _signOut() async {
+    if (_isSigningOut) {
+      return;
+    }
+
+    setState(() => _isSigningOut = true);
+    try {
+      await _authService.signOut();
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(builder: (_) => const SignupScreen()),
+        (Route<dynamic> route) => false,
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      AppSnackBar.showError(context, 'Unable to sign out. Please try again.');
+    } finally {
+      if (mounted) {
+        setState(() => _isSigningOut = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.lightBackground,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: <Widget>[
+          IconButton(
+            onPressed: _isSigningOut ? null : _signOut,
+            icon: _isSigningOut
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.logout, color: AppColors.primaryGreen),
+            tooltip: 'Sign out',
+          ),
+        ],
+      ),
       body: const Center(
         child: Text(
           'HOME SCREEN',
