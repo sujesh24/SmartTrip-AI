@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:smarttrip_ai/modules/ai_generation/common/app_colors.dart';
+import 'package:smarttrip_ai/theme/app_colors.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
 import 'package:smarttrip_ai/modules/home/screens/home_screen.dart';
 import 'package:smarttrip_ai/modules/user/common/auth_validators.dart';
@@ -11,7 +11,9 @@ import 'package:smarttrip_ai/modules/user/widgets/auth_social_button.dart';
 import 'package:smarttrip_ai/modules/user/widgets/auth_text_field.dart';
 
 class SignupScreen extends StatefulWidget {
-  const SignupScreen({super.key});
+  const SignupScreen({super.key, this.authService});
+
+  final AuthServiceBase? authService;
 
   @override
   State<SignupScreen> createState() => _SignupScreenState();
@@ -20,11 +22,17 @@ class SignupScreen extends StatefulWidget {
 class _SignupScreenState extends State<SignupScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final AuthService _authService = AuthService();
+  late final AuthServiceBase _authService;
 
   bool _obscurePassword = true;
   bool _isPrimaryLoading = false;
   bool _isGoogleLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _authService = widget.authService ?? AuthService();
+  }
 
   @override
   void dispose() {
@@ -37,7 +45,9 @@ class _SignupScreenState extends State<SignupScreen> {
 
   void _navigateToHome() {
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
+      MaterialPageRoute<void>(
+        builder: (_) => HomeScreen(authService: _authService),
+      ),
       (Route<dynamic> route) => false,
     );
   }
@@ -218,7 +228,8 @@ class _SignupScreenState extends State<SignupScreen> {
                               onTap: () {
                                 Navigator.of(context).pushReplacement(
                                   MaterialPageRoute<void>(
-                                    builder: (_) => const LoginScreen(),
+                                    builder: (_) =>
+                                        LoginScreen(authService: _authService),
                                   ),
                                 );
                               },
@@ -247,3 +258,4 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 }
+

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/modules/ai_generation/ai_service.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_assets.dart';
-import 'package:smarttrip_ai/modules/ai_generation/common/app_colors.dart';
+import 'package:smarttrip_ai/theme/app_colors.dart';
 import 'package:smarttrip_ai/modules/ai_generation/models/itinerary_request.dart';
 import 'package:smarttrip_ai/modules/ai_generation/screens/result_screen.dart';
 import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_page_layout.dart';
@@ -230,3 +230,4 @@ Rules:
     );
   }
 }
+

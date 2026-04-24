@@ -1,23 +1,31 @@
 import 'package:flutter/material.dart';
-import 'package:smarttrip_ai/modules/ai_generation/common/app_colors.dart';
+import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
+import 'package:smarttrip_ai/theme/app_colors.dart';
 import 'package:smarttrip_ai/modules/ai_generation/models/day_plan.dart';
 import 'package:smarttrip_ai/modules/ai_generation/models/itinerary_request.dart';
 import 'package:smarttrip_ai/modules/ai_generation/models/place_plan.dart';
 import 'package:smarttrip_ai/modules/ai_generation/viewmodels/result_view_model.dart';
+import 'package:smarttrip_ai/modules/ai_generation/widgets/itinerary_primary_button.dart';
 import 'package:smarttrip_ai/modules/ai_generation/widgets/result/result_day_chip.dart';
 import 'package:smarttrip_ai/modules/ai_generation/widgets/result/result_day_section.dart';
 import 'package:smarttrip_ai/modules/ai_generation/widgets/result/result_header.dart';
 import 'package:smarttrip_ai/modules/external_api/image_service.dart';
+import 'package:smarttrip_ai/modules/home/screens/home_screen.dart';
+import 'package:smarttrip_ai/modules/saved_itineraries/models/saved_itinerary.dart';
+import 'package:smarttrip_ai/modules/saved_itineraries/screens/saved_trips_screen.dart';
+import 'package:smarttrip_ai/modules/saved_itineraries/services/saved_itinerary_store.dart';
 
 class ResultScreen extends StatefulWidget {
   const ResultScreen({
     super.key,
     required this.request,
     required this.generatedText,
+    this.savedItineraryStore,
   });
 
   final ItineraryRequest request;
   final String generatedText;
+  final SavedItineraryStore? savedItineraryStore;
 
   @override
   State<ResultScreen> createState() => _ResultScreenState();
@@ -29,8 +37,10 @@ class _ResultScreenState extends State<ResultScreen> {
 
   late final ResultViewModel _viewModel;
   final ImageService _imageService = ImageService();
+  late final SavedItineraryStore _savedItineraryStore;
   late List<DayPlan> _dayPlans;
   bool _isLoadingPlaceImages = false;
+  bool _isSavingItinerary = false;
   int _selectedDay = 0;
 
   @override
@@ -40,6 +50,8 @@ class _ResultScreenState extends State<ResultScreen> {
       request: widget.request,
       generatedText: widget.generatedText,
     );
+    _savedItineraryStore =
+        widget.savedItineraryStore ?? SharedPrefsSavedItineraryStore();
     _dayPlans = _viewModel.dayPlans;
     _loadPlaceImages();
   }
@@ -78,8 +90,8 @@ class _ResultScreenState extends State<ResultScreen> {
         ),
         actions: <Widget>[
           IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.more_horiz, color: Colors.white),
+            onPressed: _closeToHome,
+            icon: const Icon(Icons.close, color: Colors.white),
           ),
         ],
       ),
@@ -98,6 +110,16 @@ class _ResultScreenState extends State<ResultScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   _buildDayTabs(),
+                  const SizedBox(height: 14),
+                  ItineraryPrimaryButton(
+                    key: const Key('result_save_button'),
+                    label: _isSavingItinerary
+                        ? 'Saving...'
+                        : 'Save to My Items',
+                    onPressed: _isSavingItinerary ? null : _saveToMyItems,
+                    isLoading: _isSavingItinerary,
+                    expand: true,
+                  ),
                   const SizedBox(height: 18),
                   ...visiblePlans.map((DayPlan dayPlan) {
                     return ResultDaySection(
@@ -196,6 +218,52 @@ class _ResultScreenState extends State<ResultScreen> {
     }
   }
 
+  Future<void> _saveToMyItems() async {
+    if (_isSavingItinerary) {
+      return;
+    }
+
+    setState(() {
+      _isSavingItinerary = true;
+    });
+
+    try {
+      final SavedItinerary itinerary = SavedItinerary.fromRequest(
+        request: widget.request,
+        dayPlans: _dayPlans,
+        coverImageUrl: _coverImageUrl,
+      );
+      await _savedItineraryStore.saveItinerary(itinerary);
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(
+          builder: (_) => SavedTripsScreen(
+            store: _savedItineraryStore,
+            navigateHomeOnExit: true,
+            successMessage: 'Trip saved to My Items.',
+          ),
+        ),
+        (Route<dynamic> route) => false,
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      AppSnackBar.showError(
+        context,
+        'Unable to save this itinerary right now. Please try again.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingItinerary = false;
+        });
+      }
+    }
+  }
+
   Future<PlacePlan> _enrichPlaceWithImage(PlacePlan place) async {
     if (place.imageUrl != null && place.imageUrl!.trim().isNotEmpty) {
       return place;
@@ -210,5 +278,24 @@ class _ResultScreenState extends State<ResultScreen> {
     }
 
     return place.copyWith(imageUrl: imageUrl);
+  }
+
+  String? get _coverImageUrl {
+    for (final DayPlan dayPlan in _dayPlans) {
+      for (final PlacePlan place in dayPlan.places) {
+        final String? imageUrl = place.imageUrl?.trim();
+        if (imageUrl != null && imageUrl.isNotEmpty) {
+          return imageUrl;
+        }
+      }
+    }
+    return null;
+  }
+
+  void _closeToHome() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
+      (Route<dynamic> route) => false,
+    );
   }
 }

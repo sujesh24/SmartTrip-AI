@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:smarttrip_ai/modules/ai_generation/common/app_colors.dart';
+import 'package:smarttrip_ai/theme/app_colors.dart';
 
 class ItineraryStepIndicator extends StatelessWidget {
   const ItineraryStepIndicator({
@@ -88,3 +88,4 @@ class ItineraryStepIndicator extends StatelessWidget {
     );
   }
 }
+

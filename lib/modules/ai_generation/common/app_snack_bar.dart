@@ -4,6 +4,18 @@ class AppSnackBar {
   const AppSnackBar._();
 
   static void showError(BuildContext context, String message) {
+    _show(context, message: message, backgroundColor: Colors.redAccent);
+  }
+
+  static void showSuccess(BuildContext context, String message) {
+    _show(context, message: message, backgroundColor: const Color(0xFF4A7A42));
+  }
+
+  static void _show(
+    BuildContext context, {
+    required String message,
+    required Color backgroundColor,
+  }) {
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     messenger.clearSnackBars();
     messenger.showSnackBar(
@@ -16,7 +28,7 @@ class AppSnackBar {
             fontWeight: FontWeight.w600,
           ),
         ),
-        backgroundColor: Colors.redAccent,
+        backgroundColor: backgroundColor,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

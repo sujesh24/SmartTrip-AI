@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:smarttrip_ai/modules/ai_generation/common/app_colors.dart';
+import 'package:smarttrip_ai/theme/app_colors.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
 import 'package:smarttrip_ai/modules/home/screens/home_screen.dart';
 import 'package:smarttrip_ai/modules/user/common/auth_validators.dart';
@@ -11,7 +11,9 @@ import 'package:smarttrip_ai/modules/user/widgets/auth_social_button.dart';
 import 'package:smarttrip_ai/modules/user/widgets/auth_text_field.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.authService});
+
+  final AuthServiceBase? authService;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -20,16 +22,24 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final AuthService _authService = AuthService();
+  final TextEditingController _resetEmailController = TextEditingController();
+  late final AuthServiceBase _authService;
 
   bool _obscurePassword = true;
   bool _isPrimaryLoading = false;
   bool _isGoogleLoading = false;
 
   @override
+  void initState() {
+    super.initState();
+    _authService = widget.authService ?? AuthService();
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _resetEmailController.dispose();
     super.dispose();
   }
 
@@ -37,7 +47,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _navigateToHome() {
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
+      MaterialPageRoute<void>(
+        builder: (_) => HomeScreen(authService: _authService),
+      ),
       (Route<dynamic> route) => false,
     );
   }
@@ -94,86 +106,237 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _showForgotPasswordDialog() async {
-    final TextEditingController resetEmailController = TextEditingController(
-      text: _emailController.text.trim(),
-    );
+    final BuildContext pageContext = context;
+    _resetEmailController.text = _emailController.text.trim();
     bool isSending = false;
 
-    await showDialog<void>(
-      context: context,
+    final bool? didSend = await showDialog<bool>(
+      context: pageContext,
+      barrierDismissible: !isSending,
       builder: (BuildContext dialogContext) {
         return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setDialogState) {
-            return AlertDialog(
-              title: const Text('Reset password'),
-              content: TextField(
-                controller: resetEmailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  hintText: 'example@mail.com',
+          builder: (BuildContext _, StateSetter setDialogState) {
+            return Dialog(
+              backgroundColor: AppColors.lightBackground,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: const BorderSide(
+                  color: AppColors.borderGreen,
+                  width: 1.4,
                 ),
               ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: isSending
-                      ? null
-                      : () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: isSending
-                      ? null
-                      : () async {
-                          final String email = resetEmailController.text.trim();
-                          final String? emailError = validateEmail(email);
-                          if (emailError != null) {
-                            AppSnackBar.showError(dialogContext, emailError);
-                            return;
-                          }
-
-                          setDialogState(() => isSending = true);
-                          final result = await _authService
-                              .sendPasswordResetEmail(email);
-                          if (!dialogContext.mounted) {
-                            return;
-                          }
-                          setDialogState(() => isSending = false);
-
-                          if (!result.isSuccess) {
-                            AppSnackBar.showError(
-                              dialogContext,
-                              result.message ?? 'Unable to send reset email.',
-                            );
-                            return;
-                          }
-
-                          Navigator.of(dialogContext).pop();
-                          if (!mounted) {
-                            return;
-                          }
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Password reset email sent.'),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    const Text(
+                      'Reset Password',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.borderGreen,
+                        fontFamily: 'Times New Roman',
+                        fontSize: 30,
+                        fontWeight: FontWeight.w600,
+                        height: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Enter your email to receive a reset link.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.primaryGreen.withValues(alpha: 0.68),
+                        fontFamily: 'Times New Roman',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    TextField(
+                      controller: _resetEmailController,
+                      enabled: !isSending,
+                      keyboardType: TextInputType.emailAddress,
+                      autofillHints: const <String>[AutofillHints.email],
+                      cursorColor: AppColors.primaryGreen,
+                      style: const TextStyle(
+                        color: AppColors.primaryGreen,
+                        fontFamily: 'Times New Roman',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Email',
+                        labelStyle: const TextStyle(
+                          color: AppColors.primaryGreen,
+                          fontFamily: 'Times New Roman',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        hintText: 'example@mail.com',
+                        hintStyle: TextStyle(
+                          color: AppColors.primaryGreen.withValues(alpha: 0.45),
+                          fontFamily: 'Times New Roman',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: AppColors.borderGreen,
+                            width: 1.4,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: AppColors.primaryGreen,
+                            width: 1.6,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: isSending
+                                ? null
+                                : () => Navigator.of(dialogContext).pop(false),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(
+                                color: AppColors.borderGreen,
+                                width: 1.4,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
                             ),
-                          );
-                        },
-                  child: isSending
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Send'),
+                            child: const Text(
+                              'Cancel',
+                              style: TextStyle(
+                                color: AppColors.primaryGreen,
+                                fontFamily: 'Times New Roman',
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: isSending
+                                ? null
+                                : () async {
+                                    final String email = _resetEmailController
+                                        .text
+                                        .trim();
+                                    final String? emailError = validateEmail(
+                                      email,
+                                    );
+                                    if (emailError != null) {
+                                      AppSnackBar.showError(
+                                        pageContext,
+                                        emailError,
+                                      );
+                                      return;
+                                    }
+
+                                    setDialogState(() => isSending = true);
+                                    final result = await _authService
+                                        .sendPasswordResetEmail(email);
+
+                                    if (!dialogContext.mounted) {
+                                      return;
+                                    }
+                                    setDialogState(() => isSending = false);
+
+                                    if (!result.isSuccess) {
+                                      AppSnackBar.showError(
+                                        pageContext,
+                                        result.message ??
+                                            'Unable to send reset email.',
+                                      );
+                                      return;
+                                    }
+
+                                    Navigator.of(dialogContext).pop(true);
+                                  },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.borderGreen,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            child: isSending
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Send',
+                                    style: TextStyle(
+                                      fontFamily: 'Times New Roman',
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ],
+              ),
             );
           },
         );
       },
     );
 
-    resetEmailController.dispose();
+    if (!mounted) {
+      return;
+    }
+
+    if (didSend == true) {
+      final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+      messenger.clearSnackBars();
+      messenger.showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Password reset email sent.',
+            style: TextStyle(
+              color: Colors.white,
+              fontFamily: 'Times New Roman',
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          backgroundColor: AppColors.borderGreen,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   @override
@@ -334,7 +497,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               onTap: () {
                                 Navigator.of(context).pushReplacement(
                                   MaterialPageRoute<void>(
-                                    builder: (_) => const SignupScreen(),
+                                    builder: (_) =>
+                                        SignupScreen(authService: _authService),
                                   ),
                                 );
                               },
@@ -363,3 +527,4 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+

@@ -8,11 +8,13 @@ class ResultDaySection extends StatelessWidget {
     required this.dayPlan,
     required this.formattedDate,
     required this.showImageSkeleton,
+    this.showEditIcon = true,
   });
 
   final DayPlan dayPlan;
   final String formattedDate;
   final bool showImageSkeleton;
+  final bool showEditIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -37,8 +39,14 @@ class ResultDaySection extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
-              const Icon(Icons.edit_square, size: 22, color: Color(0xFF1A223D)),
+              if (showEditIcon) ...<Widget>[
+                const SizedBox(width: 6),
+                const Icon(
+                  Icons.edit_square,
+                  size: 22,
+                  color: Color(0xFF1A223D),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 10),

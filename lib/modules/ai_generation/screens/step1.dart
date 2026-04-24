@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:smarttrip_ai/modules/ai_generation/common/app_colors.dart';
+import 'package:smarttrip_ai/theme/app_colors.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
 import 'package:smarttrip_ai/modules/ai_generation/models/itinerary_request.dart';
 import 'package:smarttrip_ai/modules/ai_generation/screens/step2.dart';
@@ -110,3 +110,4 @@ class _DestinationInputField extends StatelessWidget {
     );
   }
 }
+
