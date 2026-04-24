@@ -67,11 +67,19 @@ class _SavedTripsScreenState extends State<SavedTripsScreen> {
   }
 
   void _openDetail(SavedItinerary itinerary) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => SavedItineraryDetailScreen(itinerary: itinerary),
-      ),
-    );
+    Navigator.of(context)
+        .push<bool>(
+          MaterialPageRoute<bool>(
+            builder: (_) =>
+                SavedItineraryDetailScreen(itinerary: itinerary, store: _store),
+          ),
+        )
+        .then((bool? wasDeleted) {
+          if (wasDeleted == true && mounted) {
+            _loadSavedTrips();
+            AppSnackBar.showSuccess(context, 'Item deleted.');
+          }
+        });
   }
 
   void _goHome() {
@@ -128,14 +136,14 @@ class _SavedTripsScreenState extends State<SavedTripsScreen> {
           top: false,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 6, 16, 18),
-            child: _buildBody(titleColor),
+            child: _buildBody(titleColor, isDarkMode),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildBody(Color titleColor) {
+  Widget _buildBody(Color titleColor, bool isDarkMode) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -170,7 +178,7 @@ class _SavedTripsScreenState extends State<SavedTripsScreen> {
               Icon(Icons.menu_book_outlined, size: 42, color: titleColor),
               const SizedBox(height: 14),
               Text(
-                'No saved itineraries yet',
+                'No items yet',
                 style: TextStyle(
                   color: titleColor,
                   fontFamily: 'Times New Roman',
@@ -203,11 +211,173 @@ class _SavedTripsScreenState extends State<SavedTripsScreen> {
       separatorBuilder: (_, __) => const SizedBox(height: 14),
       itemBuilder: (BuildContext context, int index) {
         final SavedItinerary itinerary = _itineraries[index];
-        return SavedItineraryCard(
-          itinerary: itinerary,
-          onTap: () => _openDetail(itinerary),
+        return Dismissible(
+          key: Key('saved_itinerary_dismiss_${itinerary.id}'),
+          direction: DismissDirection.endToStart,
+          background: _DeleteSwipeBackground(isDarkMode: isDarkMode),
+          confirmDismiss: (_) => _confirmDelete(itinerary),
+          onDismissed: (_) => _deleteItinerary(itinerary),
+          child: SavedItineraryCard(
+            itinerary: itinerary,
+            onTap: () => _openDetail(itinerary),
+          ),
         );
       },
+    );
+  }
+
+  Future<bool?> _confirmDelete(SavedItinerary itinerary) {
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final Color dialogBackground = isDarkMode
+        ? AppColors.darkSurface
+        : AppColors.lightBackground;
+    final Color primaryTextColor = isDarkMode
+        ? AppColors.accentGreen
+        : AppColors.primaryGreen;
+    final Color borderColor = isDarkMode
+        ? AppColors.darkBorder
+        : AppColors.borderGreen;
+
+    return showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          backgroundColor: dialogBackground,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(color: borderColor, width: 1.2),
+          ),
+          title: Text(
+            'Delete item?',
+            style: TextStyle(
+              color: primaryTextColor,
+              fontFamily: 'Times New Roman',
+              fontSize: 30,
+              fontWeight: FontWeight.w600,
+              height: 1,
+            ),
+          ),
+          content: Text(
+            'Remove ${itinerary.destination} from My Items?',
+            style: TextStyle(
+              color: primaryTextColor.withValues(alpha: 0.76),
+              fontFamily: 'Times New Roman',
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  color: primaryTextColor,
+                  fontFamily: 'Times New Roman',
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade700,
+                foregroundColor: Colors.white,
+                elevation: 0,
+              ),
+              child: const Text(
+                'Delete',
+                style: TextStyle(
+                  fontFamily: 'Times New Roman',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteItinerary(SavedItinerary itinerary) async {
+    final List<SavedItinerary> previousItems = List<SavedItinerary>.from(
+      _itineraries,
+    );
+
+    setState(() {
+      _itineraries.removeWhere(
+        (SavedItinerary item) => item.id == itinerary.id,
+      );
+    });
+
+    try {
+      await _store.deleteItinerary(itinerary.id);
+      if (!mounted) {
+        return;
+      }
+      AppSnackBar.showSuccess(context, 'Item deleted.');
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _itineraries = previousItems;
+      });
+      AppSnackBar.showError(
+        context,
+        'Unable to delete this item right now. Please try again.',
+      );
+    }
+  }
+}
+
+class _DeleteSwipeBackground extends StatelessWidget {
+  const _DeleteSwipeBackground({required this.isDarkMode});
+
+  final bool isDarkMode;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color panelColor = isDarkMode
+        ? AppColors.darkSurface
+        : AppColors.lightBackground;
+    final Color borderColor = isDarkMode
+        ? AppColors.darkBorder
+        : AppColors.borderGreen;
+
+    return Container(
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: panelColor,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: borderColor, width: 1.2),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.red.shade700,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(Icons.delete_outline, color: Colors.white, size: 20),
+            SizedBox(width: 6),
+            Text(
+              'Delete',
+              style: TextStyle(
+                color: Colors.white,
+                fontFamily: 'Times New Roman',
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

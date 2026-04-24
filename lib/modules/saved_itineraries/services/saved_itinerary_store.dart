@@ -6,6 +6,7 @@ import 'package:smarttrip_ai/modules/saved_itineraries/models/saved_itinerary.da
 abstract class SavedItineraryStore {
   Future<List<SavedItinerary>> loadSavedItineraries();
   Future<void> saveItinerary(SavedItinerary itinerary);
+  Future<void> deleteItinerary(String itineraryId);
 }
 
 class SharedPrefsSavedItineraryStore implements SavedItineraryStore {
@@ -34,6 +35,18 @@ class SharedPrefsSavedItineraryStore implements SavedItineraryStore {
     items.sort(
       (SavedItinerary a, SavedItinerary b) => b.savedAt.compareTo(a.savedAt),
     );
+    await preferences.setStringList(
+      _savedTripsKey,
+      items.map((SavedItinerary item) => jsonEncode(item.toJson())).toList(),
+    );
+  }
+
+  @override
+  Future<void> deleteItinerary(String itineraryId) async {
+    final SharedPreferences preferences = await SharedPreferences.getInstance();
+    final List<SavedItinerary> items = _loadFromPreferences(preferences)
+      ..removeWhere((SavedItinerary item) => item.id == itineraryId);
+
     await preferences.setStringList(
       _savedTripsKey,
       items.map((SavedItinerary item) => jsonEncode(item.toJson())).toList(),

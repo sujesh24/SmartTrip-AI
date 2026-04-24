@@ -1,13 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
 import 'package:smarttrip_ai/modules/ai_generation/widgets/result/result_day_section.dart';
 import 'package:smarttrip_ai/modules/home/widgets/destination_image_view.dart';
 import 'package:smarttrip_ai/modules/saved_itineraries/models/saved_itinerary.dart';
+import 'package:smarttrip_ai/modules/saved_itineraries/services/saved_itinerary_store.dart';
 import 'package:smarttrip_ai/theme/app_colors.dart';
 
-class SavedItineraryDetailScreen extends StatelessWidget {
-  const SavedItineraryDetailScreen({super.key, required this.itinerary});
+class SavedItineraryDetailScreen extends StatefulWidget {
+  const SavedItineraryDetailScreen({
+    super.key,
+    required this.itinerary,
+    required this.store,
+  });
 
   final SavedItinerary itinerary;
+  final SavedItineraryStore store;
+
+  @override
+  State<SavedItineraryDetailScreen> createState() =>
+      _SavedItineraryDetailScreenState();
+}
+
+class _SavedItineraryDetailScreenState
+    extends State<SavedItineraryDetailScreen> {
+  bool _isDeleting = false;
 
   @override
   Widget build(BuildContext context) {
@@ -30,15 +46,28 @@ class SavedItineraryDetailScreen extends StatelessWidget {
             backgroundColor: pageColor,
             elevation: 0,
             iconTheme: IconThemeData(color: titleColor),
+            actions: <Widget>[
+              PopupMenuButton<String>(
+                onSelected: (String value) {
+                  if (value == 'delete') {
+                    _deleteItinerary();
+                  }
+                },
+                itemBuilder: (_) => const <PopupMenuEntry<String>>[
+                  PopupMenuItem<String>(value: 'delete', child: Text('Delete')),
+                ],
+              ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
                 fit: StackFit.expand,
                 children: <Widget>[
                   Hero(
-                    tag: savedItineraryHeroTag(itinerary.id),
+                    tag: savedItineraryHeroTag(widget.itinerary.id),
                     child: DestinationImageView(
-                      destinationId: itinerary.id,
-                      imageUrl: itinerary.coverImageUrl,
+                      destinationId: widget.itinerary.id,
+                      imageUrl: widget.itinerary.coverImageUrl,
+                      imageBytesBase64: widget.itinerary.coverImageBase64,
                     ),
                   ),
                   const DecoratedBox(
@@ -55,7 +84,7 @@ class SavedItineraryDetailScreen extends StatelessWidget {
                     right: 20,
                     bottom: 24,
                     child: Text(
-                      itinerary.destination,
+                      widget.itinerary.destination,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -101,25 +130,25 @@ class SavedItineraryDetailScreen extends StatelessWidget {
                       children: <Widget>[
                         _MetaChip(
                           title: 'People',
-                          value: itinerary.companion,
+                          value: widget.itinerary.companion,
                           titleColor: titleColor,
                           cardColor: pageColor,
                         ),
                         _MetaChip(
                           title: 'Budget',
-                          value: itinerary.budgetLabel,
+                          value: widget.itinerary.budgetLabel,
                           titleColor: titleColor,
                           cardColor: pageColor,
                         ),
                         _MetaChip(
                           title: 'Dates',
-                          value: itinerary.dateRangeLabel,
+                          value: widget.itinerary.dateRangeLabel,
                           titleColor: titleColor,
                           cardColor: pageColor,
                         ),
                         _MetaChip(
                           title: 'Interests',
-                          value: itinerary.interestsLabel,
+                          value: widget.itinerary.interestsLabel,
                           titleColor: titleColor,
                           cardColor: pageColor,
                           wide: true,
@@ -139,7 +168,12 @@ class SavedItineraryDetailScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  ...itinerary.dayPlans.map((dayPlan) {
+                  if (_isDeleting)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 18),
+                      child: LinearProgressIndicator(minHeight: 3),
+                    ),
+                  ...widget.itinerary.dayPlans.map((dayPlan) {
                     return ResultDaySection(
                       dayPlan: dayPlan,
                       formattedDate: _formatDayDate(dayPlan.date),
@@ -154,6 +188,115 @@ class SavedItineraryDetailScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _deleteItinerary() async {
+    if (_isDeleting) {
+      return;
+    }
+
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final Color dialogBackground = isDarkMode
+        ? AppColors.darkSurface
+        : AppColors.lightBackground;
+    final Color primaryTextColor = isDarkMode
+        ? AppColors.accentGreen
+        : AppColors.primaryGreen;
+    final Color borderColor = isDarkMode
+        ? AppColors.darkBorder
+        : AppColors.borderGreen;
+
+    final bool? shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          backgroundColor: dialogBackground,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(color: borderColor, width: 1.2),
+          ),
+          title: Text(
+            'Delete item?',
+            style: TextStyle(
+              color: primaryTextColor,
+              fontFamily: 'Times New Roman',
+              fontSize: 30,
+              fontWeight: FontWeight.w600,
+              height: 1,
+            ),
+          ),
+          content: Text(
+            'This saved item will be removed from My Items.',
+            style: TextStyle(
+              color: primaryTextColor.withValues(alpha: 0.76),
+              fontFamily: 'Times New Roman',
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  color: primaryTextColor,
+                  fontFamily: 'Times New Roman',
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade700,
+                foregroundColor: Colors.white,
+                elevation: 0,
+              ),
+              child: const Text(
+                'Delete',
+                style: TextStyle(
+                  fontFamily: 'Times New Roman',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _isDeleting = true;
+    });
+
+    try {
+      await widget.store.deleteItinerary(widget.itinerary.id);
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(true);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      AppSnackBar.showError(
+        context,
+        'Unable to delete this item right now. Please try again.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDeleting = false;
+        });
+      }
+    }
   }
 
   String _formatDayDate(DateTime date) {

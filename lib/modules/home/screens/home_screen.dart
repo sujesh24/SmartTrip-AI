@@ -8,6 +8,7 @@ import 'package:smarttrip_ai/modules/home/data/home_destinations_data.dart';
 import 'package:smarttrip_ai/modules/home/models/home_destination.dart';
 import 'package:smarttrip_ai/modules/home/screens/destination_detail_screen.dart';
 import 'package:smarttrip_ai/modules/home/screens/explore_more_destinations_screen.dart';
+import 'package:smarttrip_ai/modules/home/services/home_destination_image_cache.dart';
 import 'package:smarttrip_ai/modules/home/services/home_destination_image_loader.dart';
 import 'package:smarttrip_ai/modules/home/widgets/add_itinerary_popup.dart';
 import 'package:smarttrip_ai/modules/home/widgets/home_destination_card.dart';
@@ -23,24 +24,28 @@ class HomeScreen extends StatefulWidget {
     super.key,
     this.authService,
     this.imageLoader,
+    this.imageCache,
     this.savedItineraryStore,
   });
 
   final AuthServiceBase? authService;
   final HomeDestinationImageLoader? imageLoader;
+  final HomeDestinationImageCache? imageCache;
   final SavedItineraryStore? savedItineraryStore;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen>
-    with SingleTickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late final AuthServiceBase _authService;
   late final AnimationController _popupAnimationController;
 
   late final HomeDestinationImageLoader _imageLoader;
   late final bool _ownsImageLoader;
+  late final HomeDestinationImageCache _imageCache;
+  late final AnimationController _refreshBounceController;
+  late final Animation<double> _refreshBounceScale;
   late final SavedItineraryStore _savedItineraryStore;
 
   late final List<HomeDestination> _destinations;
@@ -50,6 +55,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   bool _isPopupOpen = false;
   bool _isOpeningPopup = false;
+  bool _isRefreshing = false;
 
   static const Duration _homeIconSpinDuration = Duration(milliseconds: 240);
 
@@ -66,6 +72,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     _ownsImageLoader = widget.imageLoader == null;
     _imageLoader = widget.imageLoader ?? PexelsHomeDestinationImageLoader();
+    _imageCache = widget.imageCache ?? SharedPrefsHomeDestinationImageCache();
 
     _popupAnimationController = AnimationController(
       vsync: this,
@@ -73,7 +80,28 @@ class _HomeScreenState extends State<HomeScreen>
       reverseDuration: const Duration(milliseconds: 320),
     );
 
-    _loadDestinationImages();
+    _refreshBounceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 520),
+    );
+    _refreshBounceScale = TweenSequence<double>(<TweenSequenceItem<double>>[
+      TweenSequenceItem<double>(
+        tween: Tween<double>(
+          begin: 1,
+          end: 0.985,
+        ).chain(CurveTween(curve: Curves.easeOutCubic)),
+        weight: 45,
+      ),
+      TweenSequenceItem<double>(
+        tween: Tween<double>(
+          begin: 0.985,
+          end: 1,
+        ).chain(CurveTween(curve: Curves.elasticOut)),
+        weight: 55,
+      ),
+    ]).animate(_refreshBounceController);
+
+    unawaited(_loadCachedAndRemoteImages());
   }
 
   @override
@@ -81,8 +109,30 @@ class _HomeScreenState extends State<HomeScreen>
     if (_ownsImageLoader) {
       _imageLoader.dispose();
     }
+    _refreshBounceController.dispose();
     _popupAnimationController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadCachedAndRemoteImages() async {
+    final Map<String, String> cachedUrls = await _imageCache
+        .loadCachedImageUrls();
+    if (!mounted) {
+      return;
+    }
+
+    if (cachedUrls.isNotEmpty) {
+      setState(() {
+        for (final HomeDestination destination in _destinations) {
+          final String? cachedUrl = cachedUrls[destination.id];
+          if (cachedUrl != null && cachedUrl.isNotEmpty) {
+            _destinationImages[destination.id] = cachedUrl;
+          }
+        }
+      });
+    }
+
+    _loadDestinationImages();
   }
 
   void _loadDestinationImages() {
@@ -106,10 +156,69 @@ class _HomeScreenState extends State<HomeScreen>
       return;
     }
 
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      unawaited(
+        _imageCache.saveImageUrl(
+          destinationId: destination.id,
+          imageUrl: imageUrl,
+        ),
+      );
+    }
+
     setState(() {
       _loadingDestinationIds.remove(destination.id);
       _destinationImages[destination.id] = imageUrl;
     });
+  }
+
+  Future<void> _refreshHomeContent() async {
+    if (_isRefreshing) {
+      return;
+    }
+
+    setState(() => _isRefreshing = true);
+    await _refreshBounceController.forward(from: 0);
+
+    final List<Future<void>> requests = <Future<void>>[];
+    for (final HomeDestination destination in _destinations) {
+      requests.add(_refreshSingleDestination(destination));
+    }
+    await Future.wait(requests);
+
+    if (mounted) {
+      setState(() => _isRefreshing = false);
+    }
+  }
+
+  Future<void> _refreshSingleDestination(HomeDestination destination) async {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() => _loadingDestinationIds.add(destination.id));
+    try {
+      final String? imageUrl = await _imageLoader.fetchImageUrl(destination);
+      if (!mounted || imageUrl == null || imageUrl.isEmpty) {
+        return;
+      }
+
+      await _imageCache.saveImageUrl(
+        destinationId: destination.id,
+        imageUrl: imageUrl,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _destinationImages[destination.id] = imageUrl;
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _loadingDestinationIds.remove(destination.id));
+      }
+    }
   }
 
   Future<void> _showAddPopup() async {
@@ -228,120 +337,159 @@ class _HomeScreenState extends State<HomeScreen>
           ),
           body: SafeArea(
             top: false,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
+            child: RefreshIndicator(
+              color: titleColor,
+              onRefresh: _refreshHomeContent,
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
+                child: ScaleTransition(
+                  scale: _refreshBounceScale,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      CircleAvatar(
-                        radius: 21,
-                        backgroundColor: isDarkMode
-                            ? AppColors.darkSurface
-                            : AppColors.borderGreen.withValues(alpha: 0.3),
-                        child: Icon(Icons.person, color: titleColor, size: 24),
+                      InkWell(
+                        key: const Key('home_profile_header_button'),
+                        onTap: _openSettings,
+                        borderRadius: BorderRadius.circular(16),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 2,
+                            vertical: 2,
+                          ),
+                          child: Row(
+                            children: <Widget>[
+                              CircleAvatar(
+                                radius: 21,
+                                backgroundColor: isDarkMode
+                                    ? AppColors.darkSurface
+                                    : AppColors.borderGreen.withValues(
+                                        alpha: 0.3,
+                                      ),
+                                child: Icon(
+                                  Icons.person,
+                                  color: titleColor,
+                                  size: 24,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Text(
+                                      username,
+                                      key: const Key('home_username'),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: titleColor,
+                                        fontFamily: 'Times New Roman',
+                                        fontSize: 27,
+                                        fontWeight: FontWeight.w600,
+                                        height: 1,
+                                      ),
+                                    ),
+                                    Text(
+                                      handle,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: titleColor.withValues(
+                                          alpha: 0.64,
+                                        ),
+                                        fontFamily: 'Times New Roman',
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              username,
-                              key: const Key('home_username'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: titleColor,
-                                fontFamily: 'Times New Roman',
-                                fontSize: 27,
-                                fontWeight: FontWeight.w600,
-                                height: 1,
-                              ),
+                      const SizedBox(height: 14),
+                      _PromoBanner(titleColor: titleColor),
+                      const SizedBox(height: 14),
+                      Text(
+                        'Popular Places',
+                        style: TextStyle(
+                          color: titleColor,
+                          fontFamily: 'Times New Roman',
+                          fontSize: 42,
+                          fontWeight: FontWeight.w600,
+                          height: 0.95,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      GridView.builder(
+                        key: const Key('home_destination_grid'),
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _destinations.length,
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 0.92,
                             ),
-                            Text(
-                              handle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: titleColor.withValues(alpha: 0.64),
-                                fontFamily: 'Times New Roman',
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
+                        itemBuilder: (BuildContext context, int index) {
+                          final HomeDestination destination =
+                              _destinations[index];
+                          return HomeDestinationCard(
+                            key: Key('home_destination_card_${destination.id}'),
+                            destination: destination,
+                            imageUrl: _destinationImages[destination.id],
+                            showLoading: _loadingDestinationIds.contains(
+                              destination.id,
                             ),
-                          ],
+                            heroTag: homeDestinationHeroTag(destination.id),
+                            onTap: () => _openDestinationDetail(destination),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      if (_isRefreshing)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: LinearProgressIndicator(
+                            minHeight: 3,
+                            color: titleColor,
+                            backgroundColor: titleColor.withValues(alpha: 0.22),
+                          ),
+                        ),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          key: const Key('home_explore_more_button'),
+                          onPressed: _openExploreMore,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: titleColor,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'Explore More',
+                            style: TextStyle(
+                              fontFamily: 'Times New Roman',
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
-                  _PromoBanner(titleColor: titleColor),
-                  const SizedBox(height: 14),
-                  Text(
-                    'Popular Places',
-                    style: TextStyle(
-                      color: titleColor,
-                      fontFamily: 'Times New Roman',
-                      fontSize: 42,
-                      fontWeight: FontWeight.w600,
-                      height: 0.95,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  GridView.builder(
-                    key: const Key('home_destination_grid'),
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _destinations.length,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                          childAspectRatio: 0.92,
-                        ),
-                    itemBuilder: (BuildContext context, int index) {
-                      final HomeDestination destination = _destinations[index];
-                      return HomeDestinationCard(
-                        key: Key('home_destination_card_${destination.id}'),
-                        destination: destination,
-                        imageUrl: _destinationImages[destination.id],
-                        showLoading: _loadingDestinationIds.contains(
-                          destination.id,
-                        ),
-                        heroTag: homeDestinationHeroTag(destination.id),
-                        onTap: () => _openDestinationDetail(destination),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      key: const Key('home_explore_more_button'),
-                      onPressed: _openExploreMore,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: titleColor,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Explore More',
-                        style: TextStyle(
-                          fontFamily: 'Times New Roman',
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -503,6 +651,7 @@ class _HomeBottomNavigationBar extends StatelessWidget {
               const Expanded(
                 child: _BottomNavItem(
                   icon: Icons.near_me,
+                  selectedIcon: Icons.near_me,
                   label: 'Discover',
                   selected: true,
                 ),
@@ -510,6 +659,7 @@ class _HomeBottomNavigationBar extends StatelessWidget {
               const Expanded(
                 child: _BottomNavItem(
                   icon: Icons.chat_bubble_outline,
+                  selectedIcon: Icons.chat_bubble,
                   label: 'Notification',
                 ),
               ),
@@ -550,6 +700,7 @@ class _HomeBottomNavigationBar extends StatelessWidget {
                 child: _BottomNavItem(
                   key: const Key('home_my_items_nav'),
                   icon: Icons.menu_book_outlined,
+                  selectedIcon: Icons.menu_book,
                   label: 'My Items',
                   onTap: onMyItemsPressed,
                 ),
@@ -558,6 +709,7 @@ class _HomeBottomNavigationBar extends StatelessWidget {
                 child: _BottomNavItem(
                   key: const Key('home_settings_nav'),
                   icon: Icons.settings_outlined,
+                  selectedIcon: Icons.settings,
                   label: 'Setting',
                   onTap: onSettingsPressed,
                 ),
@@ -574,12 +726,14 @@ class _BottomNavItem extends StatelessWidget {
   const _BottomNavItem({
     super.key,
     required this.icon,
+    this.selectedIcon,
     required this.label,
     this.selected = false,
     this.onTap,
   });
 
   final IconData icon;
+  final IconData? selectedIcon;
   final String label;
   final bool selected;
   final VoidCallback? onTap;
@@ -592,10 +746,11 @@ class _BottomNavItem extends StatelessWidget {
         : AppColors.primaryGreen.withValues(alpha: 0.55);
 
     final Color color = selected ? AppColors.borderGreen : unselectedColor;
+    final IconData activeIcon = selected ? (selectedIcon ?? icon) : icon;
 
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+    return InkWell(
+      onTap: onTap ?? () {},
+      borderRadius: BorderRadius.circular(14),
       child: SizedBox(
         height: double.infinity,
         child: Center(
@@ -604,16 +759,38 @@ class _BottomNavItem extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Icon(icon, color: color, size: 28),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeInOutCubic,
+                  switchOutCurve: Curves.easeInOutCubic,
+                  transitionBuilder:
+                      (Widget child, Animation<double> animation) {
+                        return FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            scale: animation,
+                            child: child,
+                          ),
+                        );
+                      },
+                  child: Icon(
+                    activeIcon,
+                    key: ValueKey<IconData>(activeIcon),
+                    color: color,
+                    size: 28,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text(
-                  label,
+                AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeInOutCubic,
                   style: TextStyle(
                     color: color,
                     fontFamily: 'Times New Roman',
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
+                  child: Text(label),
                 ),
               ],
             ),

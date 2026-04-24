@@ -106,6 +106,35 @@ class ImageService {
     }
   }
 
+  Future<String?> downloadImageAsBase64(String imageUrl) async {
+    final String sanitizedUrl = imageUrl.trim();
+    if (sanitizedUrl.isEmpty) {
+      return null;
+    }
+
+    try {
+      final Uri url = Uri.parse(sanitizedUrl);
+      final http.Response response = await _client.get(url).timeout(_timeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return null;
+      }
+      if (response.bodyBytes.isEmpty) {
+        return null;
+      }
+      return base64Encode(response.bodyBytes);
+    } on TimeoutException {
+      return null;
+    } on SocketException {
+      return null;
+    } on HandshakeException {
+      return null;
+    } on http.ClientException {
+      return null;
+    } on FormatException {
+      return null;
+    }
+  }
+
   String _buildQuery(String placeName, String destination) {
     final String place = placeName.trim();
     final String city = destination.trim();

@@ -13,6 +13,7 @@ class SavedItinerary {
     required this.savedAt,
     required this.dayPlans,
     this.coverImageUrl,
+    this.coverImageBase64,
   });
 
   factory SavedItinerary.fromJson(Map<String, dynamic> json) {
@@ -35,6 +36,7 @@ class SavedItinerary {
       savedAt:
           DateTime.tryParse(json['savedAt'] as String? ?? '') ?? DateTime.now(),
       coverImageUrl: (json['coverImageUrl'] as String?)?.trim(),
+      coverImageBase64: (json['coverImageBase64'] as String?)?.trim(),
       dayPlans: rawDayPlans
           .whereType<Map<dynamic, dynamic>>()
           .map((Map<dynamic, dynamic> rawDayPlan) {
@@ -53,6 +55,7 @@ class SavedItinerary {
     required ItineraryRequest request,
     required List<DayPlan> dayPlans,
     String? coverImageUrl,
+    String? coverImageBase64,
     DateTime? savedAt,
   }) {
     final String safeDestination = _safeDestination(request.destination);
@@ -76,6 +79,7 @@ class SavedItinerary {
       budget: request.budget.trim(),
       savedAt: savedAt ?? DateTime.now(),
       coverImageUrl: coverImageUrl?.trim(),
+      coverImageBase64: coverImageBase64?.trim(),
       dayPlans: dayPlans,
     );
   }
@@ -89,6 +93,7 @@ class SavedItinerary {
   final String budget;
   final DateTime savedAt;
   final String? coverImageUrl;
+  final String? coverImageBase64;
   final List<DayPlan> dayPlans;
 
   String get budgetLabel => '\u20B9 ${_formatBudget(budget)}';
@@ -112,6 +117,7 @@ class SavedItinerary {
     String? budget,
     DateTime? savedAt,
     String? coverImageUrl,
+    String? coverImageBase64,
     List<DayPlan>? dayPlans,
   }) {
     return SavedItinerary(
@@ -124,6 +130,7 @@ class SavedItinerary {
       budget: budget ?? this.budget,
       savedAt: savedAt ?? this.savedAt,
       coverImageUrl: coverImageUrl ?? this.coverImageUrl,
+      coverImageBase64: coverImageBase64 ?? this.coverImageBase64,
       dayPlans: dayPlans ?? this.dayPlans,
     );
   }
@@ -139,6 +146,7 @@ class SavedItinerary {
       'budget': budget,
       'savedAt': savedAt.toIso8601String(),
       'coverImageUrl': coverImageUrl,
+      'coverImageBase64': coverImageBase64,
       'dayPlans': dayPlans.map((DayPlan plan) => plan.toJson()).toList(),
     };
   }

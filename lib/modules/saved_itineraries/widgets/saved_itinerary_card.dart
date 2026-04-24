@@ -51,6 +51,7 @@ class SavedItineraryCard extends StatelessWidget {
                   child: DestinationImageView(
                     destinationId: itinerary.id,
                     imageUrl: itinerary.coverImageUrl,
+                    imageBytesBase64: itinerary.coverImageBase64,
                   ),
                 ),
               ),

@@ -39,6 +39,7 @@ class _ResultScreenState extends State<ResultScreen> {
   final ImageService _imageService = ImageService();
   late final SavedItineraryStore _savedItineraryStore;
   late List<DayPlan> _dayPlans;
+  late final Future<void> _placeImagesFuture;
   bool _isLoadingPlaceImages = false;
   bool _isSavingItinerary = false;
   int _selectedDay = 0;
@@ -53,7 +54,7 @@ class _ResultScreenState extends State<ResultScreen> {
     _savedItineraryStore =
         widget.savedItineraryStore ?? SharedPrefsSavedItineraryStore();
     _dayPlans = _viewModel.dayPlans;
-    _loadPlaceImages();
+    _placeImagesFuture = _loadPlaceImages();
   }
 
   @override
@@ -115,9 +116,11 @@ class _ResultScreenState extends State<ResultScreen> {
                     key: const Key('result_save_button'),
                     label: _isSavingItinerary
                         ? 'Saving...'
+                        : _isLoadingPlaceImages
+                        ? 'Preparing image...'
                         : 'Save to My Items',
                     onPressed: _isSavingItinerary ? null : _saveToMyItems,
-                    isLoading: _isSavingItinerary,
+                    isLoading: _isSavingItinerary || _isLoadingPlaceImages,
                     expand: true,
                   ),
                   const SizedBox(height: 18),
@@ -228,10 +231,20 @@ class _ResultScreenState extends State<ResultScreen> {
     });
 
     try {
+      await _placeImagesFuture;
+      if (!mounted) {
+        return;
+      }
+
+      final String? coverImageUrl = _coverImageUrl;
+      final String? coverImageBase64 = coverImageUrl == null
+          ? null
+          : await _imageService.downloadImageAsBase64(coverImageUrl);
       final SavedItinerary itinerary = SavedItinerary.fromRequest(
         request: widget.request,
         dayPlans: _dayPlans,
-        coverImageUrl: _coverImageUrl,
+        coverImageUrl: coverImageUrl,
+        coverImageBase64: coverImageBase64,
       );
       await _savedItineraryStore.saveItinerary(itinerary);
       if (!mounted) {

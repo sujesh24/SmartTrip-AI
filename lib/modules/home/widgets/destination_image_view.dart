@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_assets.dart';
 
@@ -6,17 +8,34 @@ class DestinationImageView extends StatelessWidget {
     super.key,
     required this.destinationId,
     required this.imageUrl,
+    this.imageBytesBase64,
     this.showLoading = false,
     this.fit = BoxFit.cover,
   });
 
   final String destinationId;
   final String? imageUrl;
+  final String? imageBytesBase64;
   final bool showLoading;
   final BoxFit fit;
 
   @override
   Widget build(BuildContext context) {
+    final String? sanitizedBase64 = imageBytesBase64?.trim();
+    if (sanitizedBase64 != null && sanitizedBase64.isNotEmpty) {
+      try {
+        return Image.memory(
+          base64Decode(sanitizedBase64),
+          fit: fit,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (_, __, ___) => _buildAssetFallback(),
+        );
+      } catch (_) {
+        return _buildAssetFallback();
+      }
+    }
+
     final String? sanitizedUrl = imageUrl?.trim();
     if (sanitizedUrl != null && sanitizedUrl.isNotEmpty) {
       return Image.network(
