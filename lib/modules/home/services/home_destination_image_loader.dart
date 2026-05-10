@@ -3,6 +3,7 @@ import 'package:smarttrip_ai/modules/home/models/home_destination.dart';
 
 abstract class HomeDestinationImageLoader {
   Future<String?> fetchImageUrl(HomeDestination destination);
+  Future<String?> downloadImageAsBase64(String imageUrl);
   void dispose();
 }
 
@@ -18,6 +19,11 @@ class PexelsHomeDestinationImageLoader implements HomeDestinationImageLoader {
       placeName: destination.name,
       destination: destination.pexelsQuery,
     );
+  }
+
+  @override
+  Future<String?> downloadImageAsBase64(String imageUrl) {
+    return _imageService.downloadImageAsBase64(imageUrl);
   }
 
   @override

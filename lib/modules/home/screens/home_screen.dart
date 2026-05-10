@@ -51,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late final List<HomeDestination> _destinations;
 
   final Map<String, String?> _destinationImages = <String, String?>{};
+  final Map<String, String?> _destinationImageBytes = <String, String?>{};
   final Set<String> _loadingDestinationIds = <String>{};
 
   bool _isPopupOpen = false;
@@ -115,24 +116,65 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _loadCachedAndRemoteImages() async {
-    final Map<String, String> cachedUrls = await _imageCache
-        .loadCachedImageUrls();
+    final Map<String, HomeCachedImage> cachedImages = await _imageCache
+        .loadCachedImages();
     if (!mounted) {
       return;
     }
 
-    if (cachedUrls.isNotEmpty) {
+    final Map<String, String> missingByteBackfill = <String, String>{};
+    if (cachedImages.isNotEmpty) {
       setState(() {
         for (final HomeDestination destination in _destinations) {
-          final String? cachedUrl = cachedUrls[destination.id];
+          final HomeCachedImage? cached = cachedImages[destination.id];
+          final String? cachedUrl = cached?.imageUrl;
+          final String? cachedBytes = cached?.imageBytesBase64;
           if (cachedUrl != null && cachedUrl.isNotEmpty) {
             _destinationImages[destination.id] = cachedUrl;
+          }
+          if (cachedBytes != null && cachedBytes.isNotEmpty) {
+            _destinationImageBytes[destination.id] = cachedBytes;
+          } else if (cachedUrl != null && cachedUrl.isNotEmpty) {
+            missingByteBackfill[destination.id] = cachedUrl;
           }
         }
       });
     }
 
+    for (final MapEntry<String, String> entry in missingByteBackfill.entries) {
+      unawaited(_backfillCachedBytes(entry.key, entry.value));
+    }
+
     _loadDestinationImages();
+  }
+
+  Future<void> _backfillCachedBytes(
+    String destinationId,
+    String imageUrl,
+  ) async {
+    if (_destinationImageBytes[destinationId]?.trim().isNotEmpty == true) {
+      return;
+    }
+    final String? imageBytesBase64 = await _imageLoader.downloadImageAsBase64(
+      imageUrl,
+    );
+    if (imageBytesBase64 == null || imageBytesBase64.trim().isEmpty) {
+      return;
+    }
+
+    await _imageCache.saveImage(
+      destinationId: destinationId,
+      imageUrl: imageUrl,
+      imageBytesBase64: imageBytesBase64,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _destinationImageBytes[destinationId] = imageBytesBase64;
+    });
   }
 
   void _loadDestinationImages() {
@@ -141,9 +183,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _loadDestinationImage(HomeDestination destination) async {
+  bool _hasImageData(String destinationId) {
+    final String? imageUrl = _destinationImages[destinationId]?.trim();
+    final String? imageBytes = _destinationImageBytes[destinationId]?.trim();
+    return (imageUrl != null && imageUrl.isNotEmpty) ||
+        (imageBytes != null && imageBytes.isNotEmpty);
+  }
+
+  Future<void> _loadDestinationImage(
+    HomeDestination destination, {
+    bool force = false,
+  }) async {
     if (_loadingDestinationIds.contains(destination.id) ||
-        _destinationImages.containsKey(destination.id)) {
+        (!force && _hasImageData(destination.id))) {
       return;
     }
 
@@ -152,22 +204,34 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     final String? imageUrl = await _imageLoader.fetchImageUrl(destination);
+    if (!mounted || imageUrl == null || imageUrl.trim().isEmpty) {
+      if (mounted) {
+        setState(() => _loadingDestinationIds.remove(destination.id));
+      }
+      return;
+    }
+
+    final String normalizedUrl = imageUrl.trim();
+    final String? imageBytesBase64 = await _imageLoader.downloadImageAsBase64(
+      normalizedUrl,
+    );
+
+    await _imageCache.saveImage(
+      destinationId: destination.id,
+      imageUrl: normalizedUrl,
+      imageBytesBase64: imageBytesBase64,
+    );
+
     if (!mounted) {
       return;
     }
 
-    if (imageUrl != null && imageUrl.isNotEmpty) {
-      unawaited(
-        _imageCache.saveImageUrl(
-          destinationId: destination.id,
-          imageUrl: imageUrl,
-        ),
-      );
-    }
-
     setState(() {
       _loadingDestinationIds.remove(destination.id);
-      _destinationImages[destination.id] = imageUrl;
+      _destinationImages[destination.id] = normalizedUrl;
+      if (imageBytesBase64 != null && imageBytesBase64.isNotEmpty) {
+        _destinationImageBytes[destination.id] = imageBytesBase64;
+      }
     });
   }
 
@@ -181,43 +245,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     final List<Future<void>> requests = <Future<void>>[];
     for (final HomeDestination destination in _destinations) {
-      requests.add(_refreshSingleDestination(destination));
+      if (_hasImageData(destination.id)) {
+        continue;
+      }
+      requests.add(_loadDestinationImage(destination, force: true));
     }
-    await Future.wait(requests);
+    if (requests.isNotEmpty) {
+      await Future.wait(requests);
+    }
 
     if (mounted) {
       setState(() => _isRefreshing = false);
-    }
-  }
-
-  Future<void> _refreshSingleDestination(HomeDestination destination) async {
-    if (!mounted) {
-      return;
-    }
-
-    setState(() => _loadingDestinationIds.add(destination.id));
-    try {
-      final String? imageUrl = await _imageLoader.fetchImageUrl(destination);
-      if (!mounted || imageUrl == null || imageUrl.isEmpty) {
-        return;
-      }
-
-      await _imageCache.saveImageUrl(
-        destinationId: destination.id,
-        imageUrl: imageUrl,
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _destinationImages[destination.id] = imageUrl;
-      });
-    } finally {
-      if (mounted) {
-        setState(() => _loadingDestinationIds.remove(destination.id));
-      }
     }
   }
 
@@ -306,6 +344,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       buildDestinationDetailRoute(
         destination: destination,
         imageUrl: _destinationImages[destination.id],
+        imageBytesBase64: _destinationImageBytes[destination.id],
       ),
     );
   }
@@ -445,6 +484,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             key: Key('home_destination_card_${destination.id}'),
                             destination: destination,
                             imageUrl: _destinationImages[destination.id],
+                            imageBytesBase64:
+                                _destinationImageBytes[destination.id],
                             showLoading: _loadingDestinationIds.contains(
                               destination.id,
                             ),

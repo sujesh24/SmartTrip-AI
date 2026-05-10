@@ -371,7 +371,7 @@ class FakeAuthService implements AuthServiceBase {
 
   final String? email;
   final String providerLabel;
-  DeleteAccountResult _deleteResult;
+  final DeleteAccountResult _deleteResult;
 
   bool signOutCalled = false;
   bool deleteCalled = false;
@@ -445,13 +445,20 @@ class FakeSettingsPreferencesService implements SettingsPreferencesService {
 class FakeHomeDestinationImageLoader implements HomeDestinationImageLoader {
   FakeHomeDestinationImageLoader({
     this.imageUrlsById = const <String, String?>{},
+    this.imageBytesByUrl = const <String, String?>{},
   });
 
   final Map<String, String?> imageUrlsById;
+  final Map<String, String?> imageBytesByUrl;
 
   @override
   Future<String?> fetchImageUrl(HomeDestination destination) async {
     return imageUrlsById[destination.id];
+  }
+
+  @override
+  Future<String?> downloadImageAsBase64(String imageUrl) async {
+    return imageBytesByUrl[imageUrl];
   }
 
   @override

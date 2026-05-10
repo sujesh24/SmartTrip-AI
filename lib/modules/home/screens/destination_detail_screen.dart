@@ -6,6 +6,7 @@ import 'package:smarttrip_ai/theme/app_colors.dart';
 Route<void> buildDestinationDetailRoute({
   required HomeDestination destination,
   String? imageUrl,
+  String? imageBytesBase64,
 }) {
   return PageRouteBuilder<void>(
     transitionDuration: const Duration(milliseconds: 320),
@@ -14,6 +15,7 @@ Route<void> buildDestinationDetailRoute({
       return DestinationDetailScreen(
         destination: destination,
         imageUrl: imageUrl,
+        imageBytesBase64: imageBytesBase64,
       );
     },
     transitionsBuilder:
@@ -37,10 +39,12 @@ class DestinationDetailScreen extends StatelessWidget {
     super.key,
     required this.destination,
     this.imageUrl,
+    this.imageBytesBase64,
   });
 
   final HomeDestination destination;
   final String? imageUrl;
+  final String? imageBytesBase64;
 
   @override
   Widget build(BuildContext context) {
@@ -72,6 +76,7 @@ class DestinationDetailScreen extends StatelessWidget {
                     child: DestinationImageView(
                       destinationId: destination.id,
                       imageUrl: imageUrl,
+                      imageBytesBase64: imageBytesBase64,
                     ),
                   ),
                   const DecoratedBox(

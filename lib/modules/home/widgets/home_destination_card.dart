@@ -7,6 +7,7 @@ class HomeDestinationCard extends StatelessWidget {
     super.key,
     required this.destination,
     required this.imageUrl,
+    this.imageBytesBase64,
     required this.showLoading,
     required this.onTap,
     required this.heroTag,
@@ -14,6 +15,7 @@ class HomeDestinationCard extends StatelessWidget {
 
   final HomeDestination destination;
   final String? imageUrl;
+  final String? imageBytesBase64;
   final bool showLoading;
   final VoidCallback onTap;
   final String heroTag;
@@ -44,6 +46,7 @@ class HomeDestinationCard extends StatelessWidget {
                 child: DestinationImageView(
                   destinationId: destination.id,
                   imageUrl: imageUrl,
+                  imageBytesBase64: imageBytesBase64,
                   showLoading: showLoading,
                 ),
               ),
