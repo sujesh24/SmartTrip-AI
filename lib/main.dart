@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -112,11 +113,110 @@ class _AuthGate extends StatelessWidget {
 
         final String? email = user.email ?? authService.currentUserEmail;
         if (!AdminCredentials.isAdminEmail(email)) {
-          return HomeScreen(authService: authService);
+          return _UserSessionGate(authService: authService);
         }
 
         return _AdminSessionGate(authService: authService, email: email);
       },
+    );
+  }
+}
+
+class _UserSessionGate extends StatelessWidget {
+  const _UserSessionGate({required this.authService});
+
+  final AuthServiceBase authService;
+
+  @override
+  Widget build(BuildContext context) {
+    final String? userId = authService.currentUserId;
+    if (userId == null || userId.isEmpty) {
+      return SignupScreen(authService: authService);
+    }
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .snapshots(),
+      builder:
+          (
+            BuildContext context,
+            AsyncSnapshot<DocumentSnapshot<Map<String, dynamic>>> snapshot,
+          ) {
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                snapshot.data == null) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+
+            if (snapshot.hasError) {
+              return HomeScreen(authService: authService);
+            }
+
+            if (snapshot.data != null && !snapshot.data!.exists) {
+              return _DeletedUserSessionScreen(authService: authService);
+            }
+
+            return HomeScreen(authService: authService);
+          },
+    );
+  }
+}
+
+class _DeletedUserSessionScreen extends StatefulWidget {
+  const _DeletedUserSessionScreen({required this.authService});
+
+  final AuthServiceBase authService;
+
+  @override
+  State<_DeletedUserSessionScreen> createState() =>
+      _DeletedUserSessionScreenState();
+}
+
+class _DeletedUserSessionScreenState extends State<_DeletedUserSessionScreen> {
+  bool _isSigningOut = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _handleDeletedSession();
+    });
+  }
+
+  Future<void> _handleDeletedSession() async {
+    if (_isSigningOut || !mounted) {
+      return;
+    }
+
+    setState(() => _isSigningOut = true);
+    await widget.authService.signOut();
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(
+        builder: (_) => SignupScreen(authService: widget.authService),
+      ),
+      (Route<dynamic> route) => false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 24),
+          child: Text(
+            'Your account is no longer available. Please login again.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
     );
   }
 }

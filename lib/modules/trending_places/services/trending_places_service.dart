@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:smarttrip_ai/modules/storage/storage_service.dart';
 import 'package:smarttrip_ai/modules/trending_places/data/default_trending_places.dart';
 import 'package:smarttrip_ai/modules/trending_places/models/trending_place.dart';
 
@@ -11,10 +12,15 @@ abstract class TrendingPlacesServiceBase {
 }
 
 class TrendingPlacesService implements TrendingPlacesServiceBase {
-  TrendingPlacesService({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance;
+  TrendingPlacesService({
+    FirebaseFirestore? firestore,
+    StorageService? storageService,
+  })
+    : _firestore = firestore ?? FirebaseFirestore.instance,
+      _storageService = storageService ?? StorageService();
 
   final FirebaseFirestore _firestore;
+  final StorageService _storageService;
 
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection('trending_places');
@@ -57,8 +63,19 @@ class TrendingPlacesService implements TrendingPlacesServiceBase {
   }
 
   @override
-  Future<void> deleteTrendingPlace(String placeId) {
-    return _collection.doc(placeId).delete();
+  Future<void> deleteTrendingPlace(String placeId) async {
+    final DocumentReference<Map<String, dynamic>> document = _collection.doc(
+      placeId,
+    );
+    final DocumentSnapshot<Map<String, dynamic>> snapshot = await document.get();
+
+    if (snapshot.exists) {
+      final Map<String, dynamic>? data = snapshot.data();
+      final String imageUrl = (data?['imageUrl'] ?? '').toString().trim();
+      await _storageService.deletePlaceImageByUrl(imageUrl);
+    }
+
+    await document.delete();
   }
 
   @override

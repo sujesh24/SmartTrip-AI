@@ -70,8 +70,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       AppSnackBar.showSuccess(
         context,
         createdCount == 0
-            ? 'Default places already exist.'
-            : 'Seeded $createdCount popular places.',
+            ? 'Default places already exist. No new places added.'
+            : 'Seeded $createdCount new popular places.',
       );
     } catch (_) {
       if (!mounted) {
@@ -200,7 +200,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
                 _DashboardCard(
                   title: 'Seed Places',
-                  subtitle: 'Create missing default popular places',
+                  subtitle: 'Initialize default places (skips existing)',
                   icon: Icons.auto_awesome_motion_outlined,
                   backgroundColor: cardColor,
                   borderColor: borderColor,

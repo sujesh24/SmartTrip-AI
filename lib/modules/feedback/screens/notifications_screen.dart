@@ -157,7 +157,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               primaryTextColor: primaryTextColor,
                               backgroundColor: cardColor,
                               borderColor: borderColor,
-                              onTap: () => _markRead(notification),
                               onMarkRead: () => _markRead(notification),
                             ),
                           );
@@ -177,7 +176,6 @@ class _NotificationCard extends StatelessWidget {
     required this.primaryTextColor,
     required this.backgroundColor,
     required this.borderColor,
-    required this.onTap,
     required this.onMarkRead,
   });
 
@@ -186,7 +184,6 @@ class _NotificationCard extends StatelessWidget {
   final Color primaryTextColor;
   final Color backgroundColor;
   final Color borderColor;
-  final VoidCallback onTap;
   final VoidCallback onMarkRead;
 
   @override
@@ -195,7 +192,7 @@ class _NotificationCard extends StatelessWidget {
       color: backgroundColor,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
-        onTap: onTap,
+        onTap: null,
         borderRadius: BorderRadius.circular(18),
         child: Ink(
           decoration: BoxDecoration(

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/modules/admin/common/admin_constants.dart';
 import 'package:smarttrip_ai/modules/admin/screens/admin_verification_screen.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
 import 'package:smarttrip_ai/modules/home/screens/home_screen.dart';
 import 'package:smarttrip_ai/modules/user/common/auth_validators.dart';
@@ -12,7 +11,6 @@ import 'package:smarttrip_ai/modules/user/widgets/auth_primary_button.dart';
 import 'package:smarttrip_ai/modules/user/widgets/auth_social_button.dart';
 import 'package:smarttrip_ai/modules/user/widgets/auth_text_field.dart';
 import 'package:smarttrip_ai/theme/app_colors.dart';
-import 'package:smarttrip_ai/firebase_options.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, this.authService});
@@ -102,14 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // Debug: show detected signed-in email and whether it's treated as admin.
     final String detectedEmail = _authService.currentUserEmail ?? email;
-    final bool isAdmin = AdminCredentials.isAdminEmail(detectedEmail);
-    AppSnackBar.showSuccess(
-      context,
-      'Signed in as $detectedEmail — admin: ${isAdmin ? 'yes' : 'no'}',
-    );
-
     _navigateAfterLogin(detectedEmail);
   }
 
@@ -128,14 +119,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // Debug: show detected signed-in email and whether it's treated as admin.
     final String detectedEmail = _authService.currentUserEmail ?? '';
-    final bool isAdmin = AdminCredentials.isAdminEmail(detectedEmail);
-    AppSnackBar.showSuccess(
-      context,
-      'Signed in as $detectedEmail — admin: ${isAdmin ? 'yes' : 'no'}',
-    );
-
     _navigateAfterLogin(detectedEmail);
   }
 
@@ -511,44 +495,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           onPressed: _handleGoogleLogin,
                           isLoading: _isGoogleLoading,
                         ),
-                        if (kDebugMode) ...<Widget>[
-                          const SizedBox(height: 12),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: <Widget>[
-                              TextButton(
-                                onPressed: () {
-                                  final String email =
-                                      _authService.currentUserEmail ??
-                                      'No email';
-                                  final String provider =
-                                      _authService.currentUserProviderLabel;
-                                  final String project = DefaultFirebaseOptions
-                                      .currentPlatform
-                                      .projectId;
-                                  AppSnackBar.showSuccess(
-                                    context,
-                                    'Email: $email | Provider: $provider | Project: $project',
-                                  );
-                                },
-                                child: const Text('Show Auth Info (debug)'),
-                              ),
-                              const SizedBox(width: 8),
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) => AdminVerificationScreen(
-                                        authService: _authService,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                child: const Text('Force Admin Verify'),
-                              ),
-                            ],
-                          ),
-                        ],
                         const SizedBox(height: 28),
                         Column(
                           children: <Widget>[

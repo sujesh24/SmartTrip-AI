@@ -352,66 +352,80 @@ class _UserCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: borderColor),
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
-        leading: CircleAvatar(
-          radius: 24,
-          backgroundColor: primaryTextColor.withValues(alpha: 0.12),
-          child: Icon(Icons.person_outline_rounded, color: primaryTextColor),
-        ),
-        title: Text(
-          user.displayName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: primaryTextColor,
-            fontFamily: 'Times New Roman',
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                user.email,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: primaryTextColor.withValues(alpha: 0.72),
-                  fontFamily: 'Times New Roman',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+        child: Row(
+          children: <Widget>[
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: primaryTextColor.withValues(alpha: 0.12),
+              child: Icon(
+                Icons.person_outline_rounded,
+                color: primaryTextColor,
               ),
-              const SizedBox(height: 2),
-              Text(
-                'Created: ${_formatDate(user.createdAt)}',
-                style: TextStyle(
-                  color: primaryTextColor.withValues(alpha: 0.58),
-                  fontFamily: 'Times New Roman',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-        trailing: IconButton(
-          tooltip: 'Delete user',
-          onPressed: isDeleting ? null : onDelete,
-          icon: isDeleting
-              ? SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: primaryTextColor,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    user.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: primaryTextColor,
+                      fontFamily: 'Times New Roman',
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                )
-              : Icon(Icons.delete_outline_rounded, color: Colors.red.shade700),
+                  const SizedBox(height: 4),
+                  Text(
+                    user.email,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: primaryTextColor.withValues(alpha: 0.72),
+                      fontFamily: 'Times New Roman',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Created: ${_formatDate(user.createdAt)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: primaryTextColor.withValues(alpha: 0.58),
+                      fontFamily: 'Times New Roman',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: 'Delete user',
+              onPressed: isDeleting ? null : onDelete,
+              icon: isDeleting
+                  ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: primaryTextColor,
+                      ),
+                    )
+                  : Icon(
+                      Icons.delete_outline_rounded,
+                      color: Colors.red.shade700,
+                    ),
+            ),
+          ],
         ),
       ),
     );

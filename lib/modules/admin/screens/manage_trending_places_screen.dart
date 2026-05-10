@@ -252,8 +252,8 @@ class _ManageTrendingPlacesScreenState
                         crossAxisSpacing: 14,
                         mainAxisSpacing: 14,
                         childAspectRatio: constraints.maxWidth < 380
-                            ? 0.68
-                            : 0.74,
+                            ? 0.83
+                            : 0.9,
                       ),
                       itemBuilder: (BuildContext context, int index) {
                         final TrendingPlace place = places[index];
@@ -453,7 +453,7 @@ class _PlaceGridCard extends StatelessWidget {
                     place.description.isEmpty
                         ? 'No description'
                         : place.description,
-                    maxLines: 2,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: primaryTextColor.withValues(alpha: 0.68),

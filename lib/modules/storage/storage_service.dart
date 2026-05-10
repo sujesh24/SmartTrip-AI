@@ -37,6 +37,20 @@ class StorageService {
     return downloadUrl;
   }
 
+  Future<void> deletePlaceImageByUrl(String imageUrl) async {
+    final String trimmedUrl = imageUrl.trim();
+    if (trimmedUrl.isEmpty || !trimmedUrl.contains('firebasestorage')) {
+      return;
+    }
+
+    try {
+      final Reference ref = _storage.refFromURL(trimmedUrl);
+      await ref.delete();
+    } catch (_) {
+      // Keep place deletion resilient even if image cleanup fails.
+    }
+  }
+
   String _getFileExtension(String filePath) {
     try {
       final int dot = filePath.lastIndexOf('.');

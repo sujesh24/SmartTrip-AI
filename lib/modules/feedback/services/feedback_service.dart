@@ -69,7 +69,7 @@ class FeedbackService implements FeedbackServiceBase {
       'admin_reply': '',
       'reply_time': null,
       'is_replied': false,
-      'is_read': true,
+      'is_read': false,
     });
   }
 

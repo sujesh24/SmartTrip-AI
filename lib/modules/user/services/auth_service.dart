@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:smarttrip_ai/modules/admin/common/admin_constants.dart';
 import 'package:smarttrip_ai/modules/user/common/auth_error_mapper.dart';
 import 'package:smarttrip_ai/modules/user/models/auth_result.dart';
 import 'package:smarttrip_ai/modules/user/models/delete_account_result.dart';
@@ -194,9 +193,6 @@ class AuthService implements AuthServiceBase {
   Future<void> _saveUserDocumentIfNeeded(User? user) async {
     final String? email = user?.email?.trim();
     if (user == null || email == null || email.isEmpty) {
-      return;
-    }
-    if (AdminCredentials.isAdminEmail(email)) {
       return;
     }
 
