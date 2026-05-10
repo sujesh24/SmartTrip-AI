@@ -50,6 +50,9 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
       }
 
       if (result.requiresRecentLogin) {
+        shouldResetLoading = false;
+        setState(() => _isDeleting = false);
+
         final bool shouldRelogin = await _showReloginDialog(
           result.message ??
               'Please log in again to verify your identity before deleting your account.',
@@ -238,6 +241,7 @@ class _ManageAccountScreenState extends State<ManageAccountScreen> {
       },
     );
 
+    await Future<void>.delayed(const Duration(milliseconds: 300));
     deleteController.dispose();
     return shouldDelete ?? false;
   }

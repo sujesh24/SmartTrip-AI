@@ -1,23 +1,14 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:smarttrip_ai/modules/home/models/home_destination.dart';
 import 'package:smarttrip_ai/modules/home/screens/destination_detail_screen.dart';
-import 'package:smarttrip_ai/modules/home/services/home_destination_image_loader.dart';
 import 'package:smarttrip_ai/modules/home/widgets/home_destination_card.dart';
+import 'package:smarttrip_ai/modules/trending_places/models/trending_place.dart';
+import 'package:smarttrip_ai/modules/trending_places/services/trending_places_service.dart';
 import 'package:smarttrip_ai/theme/app_colors.dart';
 
 class ExploreMoreDestinationsScreen extends StatefulWidget {
-  const ExploreMoreDestinationsScreen({
-    super.key,
-    required this.destinations,
-    this.initialImageUrls = const <String, String?>{},
-    this.imageLoader,
-  });
+  const ExploreMoreDestinationsScreen({super.key, this.placesService});
 
-  final List<HomeDestination> destinations;
-  final Map<String, String?> initialImageUrls;
-  final HomeDestinationImageLoader? imageLoader;
+  final TrendingPlacesServiceBase? placesService;
 
   @override
   State<ExploreMoreDestinationsScreen> createState() =>
@@ -26,66 +17,18 @@ class ExploreMoreDestinationsScreen extends StatefulWidget {
 
 class _ExploreMoreDestinationsScreenState
     extends State<ExploreMoreDestinationsScreen> {
-  late final HomeDestinationImageLoader _imageLoader;
-  late final bool _ownsImageLoader;
-
-  final Map<String, String?> _imageUrls = <String, String?>{};
-  final Set<String> _loadingDestinationIds = <String>{};
+  late final TrendingPlacesServiceBase _placesService;
 
   @override
   void initState() {
     super.initState();
-    _ownsImageLoader = widget.imageLoader == null;
-    _imageLoader = widget.imageLoader ?? PexelsHomeDestinationImageLoader();
-
-    _imageUrls.addAll(widget.initialImageUrls);
-    _loadMissingImages();
+    _placesService = widget.placesService ?? TrendingPlacesService();
   }
 
-  @override
-  void dispose() {
-    if (_ownsImageLoader) {
-      _imageLoader.dispose();
-    }
-    super.dispose();
-  }
-
-  void _loadMissingImages() {
-    for (final HomeDestination destination in widget.destinations) {
-      if (_imageUrls.containsKey(destination.id)) {
-        continue;
-      }
-      unawaited(_loadDestinationImage(destination));
-    }
-  }
-
-  Future<void> _loadDestinationImage(HomeDestination destination) async {
-    if (_loadingDestinationIds.contains(destination.id)) {
-      return;
-    }
-
-    if (mounted) {
-      setState(() => _loadingDestinationIds.add(destination.id));
-    }
-
-    final String? imageUrl = await _imageLoader.fetchImageUrl(destination);
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _loadingDestinationIds.remove(destination.id);
-      _imageUrls[destination.id] = imageUrl;
-    });
-  }
-
-  void _openDestinationDetail(HomeDestination destination) {
-    Navigator.of(context).push(
-      buildDestinationDetailRoute(
-        destination: destination,
-        imageUrl: _imageUrls[destination.id],
-      ),
-    );
+  void _openPlaceDetail(TrendingPlace place) {
+    Navigator.of(
+      context,
+    ).push(buildDestinationDetailRoute(place: place, imageUrl: place.imageUrl));
   }
 
   @override
@@ -97,6 +40,10 @@ class _ExploreMoreDestinationsScreenState
     final Color titleColor = isDarkMode
         ? AppColors.accentGreen
         : AppColors.primaryGreen;
+    final Color cardColor = isDarkMode ? AppColors.darkSurface : Colors.white;
+    final Color borderColor = isDarkMode
+        ? AppColors.darkBorder
+        : const Color(0x338DA180);
 
     return Scaffold(
       backgroundColor: pageColor,
@@ -114,26 +61,131 @@ class _ExploreMoreDestinationsScreenState
           ),
         ),
       ),
-      body: GridView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-        itemCount: widget.destinations.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 0.92,
+      body: StreamBuilder<List<TrendingPlace>>(
+        stream: _placesService.watchTrendingPlaces(),
+        builder:
+            (
+              BuildContext context,
+              AsyncSnapshot<List<TrendingPlace>> snapshot,
+            ) {
+              if (snapshot.hasError) {
+                return _ExploreStateCard(
+                  icon: Icons.cloud_off_outlined,
+                  title: 'Unable to load places',
+                  message: 'Check your connection and try again.',
+                  primaryTextColor: titleColor,
+                  backgroundColor: cardColor,
+                  borderColor: borderColor,
+                );
+              }
+
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  snapshot.data == null) {
+                return Center(
+                  child: CircularProgressIndicator(color: titleColor),
+                );
+              }
+
+              final List<TrendingPlace> places =
+                  snapshot.data ?? <TrendingPlace>[];
+              if (places.isEmpty) {
+                return _ExploreStateCard(
+                  icon: Icons.travel_explore_outlined,
+                  title: 'No popular places yet',
+                  message: 'New admin-added destinations will appear here.',
+                  primaryTextColor: titleColor,
+                  backgroundColor: cardColor,
+                  borderColor: borderColor,
+                );
+              }
+
+              return GridView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                itemCount: places.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 0.92,
+                ),
+                itemBuilder: (BuildContext context, int index) {
+                  final TrendingPlace place = places[index];
+                  return HomeDestinationCard(
+                    key: Key('explore_destination_card_${place.id}'),
+                    place: place,
+                    imageUrl: place.imageUrl,
+                    showLoading: false,
+                    heroTag: trendingPlaceHeroTag(place.id),
+                    onTap: () => _openPlaceDetail(place),
+                  );
+                },
+              );
+            },
+      ),
+    );
+  }
+}
+
+class _ExploreStateCard extends StatelessWidget {
+  const _ExploreStateCard({
+    required this.icon,
+    required this.title,
+    required this.message,
+    required this.primaryTextColor,
+    required this.backgroundColor,
+    required this.borderColor,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final Color primaryTextColor;
+  final Color backgroundColor;
+  final Color borderColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: borderColor),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 28, 20, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(icon, color: primaryTextColor, size: 42),
+                const SizedBox(height: 12),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: primaryTextColor,
+                    fontFamily: 'Times New Roman',
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: primaryTextColor.withValues(alpha: 0.68),
+                    fontFamily: 'Times New Roman',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        itemBuilder: (BuildContext context, int index) {
-          final HomeDestination destination = widget.destinations[index];
-          return HomeDestinationCard(
-            key: Key('explore_destination_card_${destination.id}'),
-            destination: destination,
-            imageUrl: _imageUrls[destination.id],
-            showLoading: _loadingDestinationIds.contains(destination.id),
-            heroTag: homeDestinationHeroTag(destination.id),
-            onTap: () => _openDestinationDetail(destination),
-          );
-        },
       ),
     );
   }

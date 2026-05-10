@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:smarttrip_ai/modules/home/models/home_destination.dart';
 import 'package:smarttrip_ai/modules/home/widgets/destination_image_view.dart';
+import 'package:smarttrip_ai/modules/trending_places/models/trending_place.dart';
 
 class HomeDestinationCard extends StatelessWidget {
   const HomeDestinationCard({
     super.key,
-    required this.destination,
+    required this.place,
     required this.imageUrl,
     this.imageBytesBase64,
     required this.showLoading,
@@ -13,7 +13,7 @@ class HomeDestinationCard extends StatelessWidget {
     required this.heroTag,
   });
 
-  final HomeDestination destination;
+  final TrendingPlace place;
   final String? imageUrl;
   final String? imageBytesBase64;
   final bool showLoading;
@@ -44,7 +44,7 @@ class HomeDestinationCard extends StatelessWidget {
               Hero(
                 tag: heroTag,
                 child: DestinationImageView(
-                  destinationId: destination.id,
+                  destinationId: place.id,
                   imageUrl: imageUrl,
                   imageBytesBase64: imageBytesBase64,
                   showLoading: showLoading,
@@ -64,7 +64,7 @@ class HomeDestinationCard extends StatelessWidget {
                 right: 10,
                 top: 12,
                 child: Text(
-                  destination.displayName,
+                  place.displayName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -86,7 +86,7 @@ class HomeDestinationCard extends StatelessWidget {
                     const SizedBox(width: 3),
                     Expanded(
                       child: Text(
-                        'Reviews  ${destination.rating.toStringAsFixed(1)}',
+                        'Reviews  ${place.rating.toStringAsFixed(1)}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(

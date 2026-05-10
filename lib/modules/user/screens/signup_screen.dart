@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:smarttrip_ai/theme/app_colors.dart';
+import 'package:smarttrip_ai/modules/admin/common/admin_constants.dart';
+import 'package:smarttrip_ai/modules/admin/screens/admin_verification_screen.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
 import 'package:smarttrip_ai/modules/home/screens/home_screen.dart';
 import 'package:smarttrip_ai/modules/user/common/auth_validators.dart';
@@ -9,6 +10,7 @@ import 'package:smarttrip_ai/modules/user/widgets/auth_or_divider.dart';
 import 'package:smarttrip_ai/modules/user/widgets/auth_primary_button.dart';
 import 'package:smarttrip_ai/modules/user/widgets/auth_social_button.dart';
 import 'package:smarttrip_ai/modules/user/widgets/auth_text_field.dart';
+import 'package:smarttrip_ai/theme/app_colors.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key, this.authService});
@@ -52,6 +54,20 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
+  void _navigateAfterAuth(String? email) {
+    if (AdminCredentials.isAdminEmail(email)) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(
+          builder: (_) => AdminVerificationScreen(authService: _authService),
+        ),
+        (Route<dynamic> route) => false,
+      );
+      return;
+    }
+
+    _navigateToHome();
+  }
+
   Future<void> _handleEmailSignup() async {
     final String email = _emailController.text.trim();
     final String password = _passwordController.text;
@@ -59,6 +75,11 @@ class _SignupScreenState extends State<SignupScreen> {
     final String? emailError = validateEmail(email);
     if (emailError != null) {
       AppSnackBar.showError(context, emailError);
+      return;
+    }
+
+    if (AdminCredentials.isAdminEmail(email)) {
+      AppSnackBar.showError(context, 'Admin accounts must use login.');
       return;
     }
 
@@ -86,7 +107,7 @@ class _SignupScreenState extends State<SignupScreen> {
       return;
     }
 
-    _navigateToHome();
+    _navigateAfterAuth(_authService.currentUserEmail ?? email);
   }
 
   Future<void> _handleGoogleSignup() async {
@@ -104,7 +125,7 @@ class _SignupScreenState extends State<SignupScreen> {
       return;
     }
 
-    _navigateToHome();
+    _navigateAfterAuth(_authService.currentUserEmail);
   }
 
   @override
@@ -258,4 +279,3 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 }
-

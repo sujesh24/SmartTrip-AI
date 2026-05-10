@@ -42,13 +42,17 @@ class AuthSocialButton extends StatelessWidget {
                 children: <Widget>[
                   SizedBox(width: 30, child: Center(child: leading)),
                   const SizedBox(width: 10),
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      color: AppColors.primaryGreen,
-                      fontFamily: 'Times New Roman',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.primaryGreen,
+                        fontFamily: 'Times New Roman',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -57,4 +61,3 @@ class AuthSocialButton extends StatelessWidget {
     );
   }
 }
-

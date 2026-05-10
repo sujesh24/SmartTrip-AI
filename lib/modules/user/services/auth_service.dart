@@ -1,5 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:smarttrip_ai/modules/admin/common/admin_constants.dart';
 import 'package:smarttrip_ai/modules/user/common/auth_error_mapper.dart';
 import 'package:smarttrip_ai/modules/user/models/auth_result.dart';
 import 'package:smarttrip_ai/modules/user/models/delete_account_result.dart';
@@ -8,6 +10,7 @@ abstract class AuthServiceBase {
   Stream<User?> authStateChanges();
 
   bool get isSignedIn;
+  String? get currentUserId;
   String? get currentUserEmail;
   String get currentUserProviderLabel;
 
@@ -29,18 +32,26 @@ abstract class AuthServiceBase {
 }
 
 class AuthService implements AuthServiceBase {
-  AuthService({FirebaseAuth? firebaseAuth, GoogleSignIn? googleSignIn})
-    : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
-      _googleSignIn = googleSignIn ?? GoogleSignIn();
+  AuthService({
+    FirebaseAuth? firebaseAuth,
+    GoogleSignIn? googleSignIn,
+    FirebaseFirestore? firestore,
+  }) : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
+       _googleSignIn = googleSignIn ?? GoogleSignIn(),
+       _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseAuth _firebaseAuth;
   final GoogleSignIn _googleSignIn;
+  final FirebaseFirestore _firestore;
 
   @override
   Stream<User?> authStateChanges() => _firebaseAuth.authStateChanges();
 
   @override
   bool get isSignedIn => _firebaseAuth.currentUser != null;
+
+  @override
+  String? get currentUserId => _firebaseAuth.currentUser?.uid;
 
   @override
   String? get currentUserEmail => _firebaseAuth.currentUser?.email;
@@ -74,10 +85,12 @@ class AuthService implements AuthServiceBase {
     required String password,
   }) async {
     try {
-      await _firebaseAuth.createUserWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
+      final UserCredential credential = await _firebaseAuth
+          .createUserWithEmailAndPassword(
+            email: email.trim(),
+            password: password,
+          );
+      await _saveUserDocumentIfNeeded(credential.user);
       return AuthResult.success;
     } on FirebaseAuthException catch (error) {
       return AuthResult.failure(mapFirebaseAuthErrorCode(error.code));
@@ -92,10 +105,9 @@ class AuthService implements AuthServiceBase {
     required String password,
   }) async {
     try {
-      await _firebaseAuth.signInWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
+      final UserCredential credential = await _firebaseAuth
+          .signInWithEmailAndPassword(email: email.trim(), password: password);
+      await _saveUserDocumentIfNeeded(credential.user);
       return AuthResult.success;
     } on FirebaseAuthException catch (error) {
       return AuthResult.failure(mapFirebaseAuthErrorCode(error.code));
@@ -132,7 +144,9 @@ class AuthService implements AuthServiceBase {
         idToken: googleAuth.idToken,
       );
 
-      await _firebaseAuth.signInWithCredential(credential);
+      final UserCredential userCredential = await _firebaseAuth
+          .signInWithCredential(credential);
+      await _saveUserDocumentIfNeeded(userCredential.user);
       return AuthResult.success;
     } on FirebaseAuthException catch (error) {
       return AuthResult.failure(mapFirebaseAuthErrorCode(error.code));
@@ -174,6 +188,48 @@ class AuthService implements AuthServiceBase {
       return DeleteAccountResult.failure(
         'Unable to delete account right now. Please try again.',
       );
+    }
+  }
+
+  Future<void> _saveUserDocumentIfNeeded(User? user) async {
+    final String? email = user?.email?.trim();
+    if (user == null || email == null || email.isEmpty) {
+      return;
+    }
+    if (AdminCredentials.isAdminEmail(email)) {
+      return;
+    }
+
+    try {
+      final DocumentReference<Map<String, dynamic>> document = _firestore
+          .collection('users')
+          .doc(user.uid);
+      final DocumentSnapshot<Map<String, dynamic>> snapshot = await document
+          .get();
+      final String displayName = user.displayName?.trim().isNotEmpty == true
+          ? user.displayName!.trim()
+          : email.split('@').first;
+
+      final Map<String, Object?> data = <String, Object?>{
+        'name': displayName,
+        'email': email,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (snapshot.exists) {
+        if (!snapshot.data()!.containsKey('createdAt')) {
+          data['createdAt'] = FieldValue.serverTimestamp();
+        }
+        await document.set(data, SetOptions(merge: true));
+        return;
+      }
+
+      await document.set(<String, Object?>{
+        ...data,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {
+      // Authentication should not fail because profile metadata could not save.
     }
   }
 }

@@ -2,6 +2,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/firebase_options.dart';
+import 'package:smarttrip_ai/modules/admin/common/admin_constants.dart';
+import 'package:smarttrip_ai/modules/admin/screens/admin_dashboard_screen.dart';
+import 'package:smarttrip_ai/modules/admin/screens/admin_verification_screen.dart';
+import 'package:smarttrip_ai/modules/admin/services/admin_session_service.dart';
 import 'package:smarttrip_ai/modules/home/screens/home_screen.dart';
 import 'package:smarttrip_ai/modules/user/screens/signup_screen.dart';
 import 'package:smarttrip_ai/modules/user/services/auth_service.dart';
@@ -43,7 +47,8 @@ class _AppBootstrapState extends State<_AppBootstrap> {
     return FutureBuilder<Object?>(
       future: _initializationFuture,
       builder: (BuildContext context, AsyncSnapshot<Object?> snapshot) {
-        if (!snapshot.hasData && snapshot.connectionState != ConnectionState.done) {
+        if (!snapshot.hasData &&
+            snapshot.connectionState != ConnectionState.done) {
           return const MaterialApp(
             debugShowCheckedModeBanner: false,
             home: Scaffold(body: Center(child: CircularProgressIndicator())),
@@ -78,21 +83,73 @@ class MyApp extends StatelessWidget {
           themeMode: themeMode,
           home: firebaseInitError != null
               ? const _StartupErrorScreen()
-              : StreamBuilder<User?>(
-                  stream: currentAuthService.authStateChanges(),
-                  initialData: currentAuthService.isSignedIn
-                      ? FirebaseAuth.instance.currentUser
-                      : null,
-                  builder:
-                      (BuildContext context, AsyncSnapshot<User?> snapshot) {
-                        if (snapshot.data != null) {
-                          return HomeScreen(authService: currentAuthService);
-                        }
-
-                        return SignupScreen(authService: currentAuthService);
-                      },
-                ),
+              : _AuthGate(authService: currentAuthService),
           debugShowCheckedModeBanner: false,
+        );
+      },
+    );
+  }
+}
+
+class _AuthGate extends StatelessWidget {
+  const _AuthGate({required this.authService});
+
+  final AuthServiceBase authService;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: authService.authStateChanges(),
+      initialData: authService.isSignedIn
+          ? FirebaseAuth.instance.currentUser
+          : null,
+      builder: (BuildContext context, AsyncSnapshot<User?> snapshot) {
+        final User? user = snapshot.data;
+
+        if (user == null) {
+          return SignupScreen(authService: authService);
+        }
+
+        final String? email = user.email ?? authService.currentUserEmail;
+        if (!AdminCredentials.isAdminEmail(email)) {
+          return HomeScreen(authService: authService);
+        }
+
+        return _AdminSessionGate(authService: authService, email: email);
+      },
+    );
+  }
+}
+
+class _AdminSessionGate extends StatelessWidget {
+  const _AdminSessionGate({required this.authService, required this.email});
+
+  final AuthServiceBase authService;
+  final String? email;
+
+  static final AdminSessionService _adminSessionService = AdminSessionService();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: _adminSessionService.hasVerifiedAdminSession(email),
+      builder: (BuildContext context, AsyncSnapshot<bool> snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.data == true) {
+          return AdminDashboardScreen(
+            authService: authService,
+            sessionService: _adminSessionService,
+          );
+        }
+
+        return AdminVerificationScreen(
+          authService: authService,
+          sessionService: _adminSessionService,
         );
       },
     );

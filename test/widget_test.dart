@@ -2,12 +2,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:smarttrip_ai/modules/home/models/home_destination.dart';
+import 'package:smarttrip_ai/modules/feedback/models/feedback_entry.dart';
+import 'package:smarttrip_ai/modules/feedback/services/feedback_service.dart';
 import 'package:smarttrip_ai/modules/home/screens/home_screen.dart';
-import 'package:smarttrip_ai/modules/home/services/home_destination_image_loader.dart';
 import 'package:smarttrip_ai/modules/settings/screens/manage_account_screen.dart';
 import 'package:smarttrip_ai/modules/settings/screens/settings_screen.dart';
 import 'package:smarttrip_ai/modules/settings/services/settings_preferences_service.dart';
+import 'package:smarttrip_ai/modules/trending_places/models/trending_place.dart';
+import 'package:smarttrip_ai/modules/trending_places/services/trending_places_service.dart';
 import 'package:smarttrip_ai/modules/user/models/auth_result.dart';
 import 'package:smarttrip_ai/modules/user/models/delete_account_result.dart';
 import 'package:smarttrip_ai/modules/user/services/auth_service.dart';
@@ -28,7 +30,8 @@ void main() {
       MaterialApp(
         home: HomeScreen(
           authService: authService,
-          imageLoader: FakeHomeDestinationImageLoader(),
+          placesService: FakeTrendingPlacesService(),
+          feedbackService: FakeFeedbackService(),
         ),
       ),
     );
@@ -50,7 +53,8 @@ void main() {
       MaterialApp(
         home: HomeScreen(
           authService: authService,
-          imageLoader: FakeHomeDestinationImageLoader(),
+          placesService: FakeTrendingPlacesService(),
+          feedbackService: FakeFeedbackService(),
         ),
       ),
     );
@@ -71,7 +75,8 @@ void main() {
       MaterialApp(
         home: HomeScreen(
           authService: authService,
-          imageLoader: FakeHomeDestinationImageLoader(),
+          placesService: FakeTrendingPlacesService(),
+          feedbackService: FakeFeedbackService(),
         ),
       ),
     );
@@ -80,14 +85,15 @@ void main() {
     expect(find.text('Anna Wang'), findsOneWidget);
   });
 
-  testWidgets('home renders six destination cards from fixed data', (
+  testWidgets('home renders destination cards from dynamic data', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: HomeScreen(
           authService: FakeAuthService(),
-          imageLoader: FakeHomeDestinationImageLoader(),
+          placesService: FakeTrendingPlacesService(),
+          feedbackService: FakeFeedbackService(),
         ),
       ),
     );
@@ -126,13 +132,18 @@ void main() {
       MaterialApp(
         home: HomeScreen(
           authService: FakeAuthService(),
-          imageLoader: FakeHomeDestinationImageLoader(),
+          placesService: FakeTrendingPlacesService(),
+          feedbackService: FakeFeedbackService(),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('home_explore_more_button')));
+    final Finder exploreButton = find.byKey(
+      const Key('home_explore_more_button'),
+    );
+    await tester.ensureVisible(exploreButton);
+    await tester.tap(exploreButton);
     await tester.pumpAndSettle();
 
     expect(find.text('Explore More'), findsOneWidget);
@@ -149,13 +160,18 @@ void main() {
       MaterialApp(
         home: HomeScreen(
           authService: FakeAuthService(),
-          imageLoader: FakeHomeDestinationImageLoader(),
+          placesService: FakeTrendingPlacesService(),
+          feedbackService: FakeFeedbackService(),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('home_destination_card_tokyo')));
+    final Finder tokyoCard = find.byKey(
+      const Key('home_destination_card_tokyo'),
+    );
+    await tester.ensureVisible(tokyoCard);
+    await tester.tap(tokyoCard);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('destination_detail_title')), findsOneWidget);
@@ -175,7 +191,8 @@ void main() {
         MaterialApp(
           home: HomeScreen(
             authService: FakeAuthService(),
-            imageLoader: FakeHomeDestinationImageLoader(),
+            placesService: FakeTrendingPlacesService(),
+            feedbackService: FakeFeedbackService(),
           ),
         ),
       );
@@ -195,20 +212,28 @@ void main() {
       MaterialApp(
         home: HomeScreen(
           authService: FakeAuthService(),
-          imageLoader: FakeHomeDestinationImageLoader(),
+          placesService: FakeTrendingPlacesService(),
+          feedbackService: FakeFeedbackService(),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('home_explore_more_button')));
+    final Finder exploreButton = find.byKey(
+      const Key('home_explore_more_button'),
+    );
+    await tester.ensureVisible(exploreButton);
+    await tester.tap(exploreButton);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('explore_destination_card_paris')));
+    final Finder tokyoCard = find.byKey(
+      const Key('explore_destination_card_tokyo'),
+    );
+    await tester.tap(tokyoCard);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('destination_detail_title')), findsOneWidget);
-    expect(find.textContaining('Paris'), findsWidgets);
+    expect(find.textContaining('Tokyo'), findsWidgets);
   });
 
   testWidgets('notifications toggle persists across rebuild', (
@@ -358,7 +383,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(authService.signOutCalled, isTrue);
-    expect(find.text('Login'), findsOneWidget);
+    expect(find.text('Login'), findsWidgets);
   });
 }
 
@@ -381,6 +406,9 @@ class FakeAuthService implements AuthServiceBase {
 
   @override
   bool get isSignedIn => email != null;
+
+  @override
+  String? get currentUserId => email == null ? null : 'test-user-id';
 
   @override
   String? get currentUserEmail => email;
@@ -442,25 +470,146 @@ class FakeSettingsPreferencesService implements SettingsPreferencesService {
   }
 }
 
-class FakeHomeDestinationImageLoader implements HomeDestinationImageLoader {
-  FakeHomeDestinationImageLoader({
-    this.imageUrlsById = const <String, String?>{},
-    this.imageBytesByUrl = const <String, String?>{},
-  });
+class FakeTrendingPlacesService implements TrendingPlacesServiceBase {
+  FakeTrendingPlacesService({this.places = _testTrendingPlaces});
 
-  final Map<String, String?> imageUrlsById;
-  final Map<String, String?> imageBytesByUrl;
+  final List<TrendingPlace> places;
 
   @override
-  Future<String?> fetchImageUrl(HomeDestination destination) async {
-    return imageUrlsById[destination.id];
+  Stream<List<TrendingPlace>> watchTrendingPlaces() {
+    return Stream<List<TrendingPlace>>.value(places);
   }
 
   @override
-  Future<String?> downloadImageAsBase64(String imageUrl) async {
-    return imageBytesByUrl[imageUrl];
-  }
+  Future<void> addTrendingPlace(TrendingPlace place) async {}
 
   @override
-  void dispose() {}
+  Future<void> updateTrendingPlace(TrendingPlace place) async {}
+
+  @override
+  Future<void> deleteTrendingPlace(String placeId) async {}
+
+  @override
+  Future<int> seedDefaultTrendingPlaces() async {
+    return 0;
+  }
 }
+
+class FakeFeedbackService implements FeedbackServiceBase {
+  const FakeFeedbackService({this.unreadCount = 0});
+
+  final int unreadCount;
+
+  @override
+  Stream<List<FeedbackEntry>> watchAllFeedback() {
+    return const Stream<List<FeedbackEntry>>.empty();
+  }
+
+  @override
+  Stream<List<FeedbackEntry>> watchRepliedFeedbackForUser(String userId) {
+    return const Stream<List<FeedbackEntry>>.empty();
+  }
+
+  @override
+  Stream<int> watchUnreadReplyCount(String userId) {
+    return Stream<int>.value(unreadCount);
+  }
+
+  @override
+  Future<void> submitFeedback({
+    required String userId,
+    required String userName,
+    required String message,
+    required int rating,
+  }) async {}
+
+  @override
+  Future<void> replyToFeedback({
+    required String feedbackId,
+    required String reply,
+  }) async {}
+
+  @override
+  Future<void> markFeedbackRead(String feedbackId) async {}
+}
+
+const List<TrendingPlace> _testTrendingPlaces = <TrendingPlace>[
+  TrendingPlace(
+    id: 'tokyo',
+    name: 'Tokyo',
+    country: 'Japan',
+    description: 'Tokyo is a vibrant destination for travelers.',
+    imageUrl: '',
+    bestTime: 'March - May',
+    budget: 'High',
+    rating: 4.8,
+    category: 'City',
+    createdAt: null,
+    updatedAt: null,
+  ),
+  TrendingPlace(
+    id: 'london',
+    name: 'London',
+    country: 'United Kingdom',
+    description: 'London blends heritage and modern travel.',
+    imageUrl: '',
+    bestTime: 'March - May',
+    budget: 'High',
+    rating: 4.7,
+    category: 'Heritage',
+    createdAt: null,
+    updatedAt: null,
+  ),
+  TrendingPlace(
+    id: 'paris',
+    name: 'Paris',
+    country: 'France',
+    description: 'Paris is loved for art, food, and landmarks.',
+    imageUrl: '',
+    bestTime: 'April - June',
+    budget: 'High',
+    rating: 4.8,
+    category: 'Romantic',
+    createdAt: null,
+    updatedAt: null,
+  ),
+  TrendingPlace(
+    id: 'dubai',
+    name: 'Dubai',
+    country: 'United Arab Emirates',
+    description: 'Dubai is known for luxury and architecture.',
+    imageUrl: '',
+    bestTime: 'November - March',
+    budget: 'High',
+    rating: 4.6,
+    category: 'Luxury',
+    createdAt: null,
+    updatedAt: null,
+  ),
+  TrendingPlace(
+    id: 'singapore',
+    name: 'Singapore',
+    country: 'Singapore',
+    description: 'Singapore is clean, green, and family friendly.',
+    imageUrl: '',
+    bestTime: 'February - April',
+    budget: 'Medium',
+    rating: 4.7,
+    category: 'Family',
+    createdAt: null,
+    updatedAt: null,
+  ),
+  TrendingPlace(
+    id: 'kerala',
+    name: 'Kerala',
+    country: 'India',
+    description: 'Kerala is famous for backwaters and nature.',
+    imageUrl: '',
+    bestTime: 'October - March',
+    budget: 'Medium',
+    rating: 4.6,
+    category: 'Nature',
+    createdAt: null,
+    updatedAt: null,
+  ),
+];

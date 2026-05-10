@@ -40,6 +40,10 @@ dependencies:
   google_sign_in: ^6.2.2
   shared_preferences: ^2.3.3
   url_launcher: ^6.3.1
+  cloud_firestore: ^6.3.0
+  flutter_secure_storage: ^10.1.0
+  firebase_storage: ^13.3.0
+  image_picker: ^1.1.1
 
 dev_dependencies:
   flutter_test:
@@ -105,4 +109,3 @@ flutter_launcher_icons:
   adaptive_icon_foreground_inset: 0
   remove_alpha_ios: true
   background_color_ios: "#FFFFFF"
-

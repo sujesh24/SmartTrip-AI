@@ -3,18 +3,20 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_assets.dart';
 import 'package:smarttrip_ai/modules/ai_generation/screens/step1.dart';
+import 'package:smarttrip_ai/modules/feedback/screens/feedback_screen.dart';
+import 'package:smarttrip_ai/modules/feedback/screens/notifications_screen.dart';
+import 'package:smarttrip_ai/modules/feedback/services/feedback_service.dart';
 import 'package:smarttrip_ai/modules/home/common/home_username_formatter.dart';
-import 'package:smarttrip_ai/modules/home/data/home_destinations_data.dart';
-import 'package:smarttrip_ai/modules/home/models/home_destination.dart';
 import 'package:smarttrip_ai/modules/home/screens/destination_detail_screen.dart';
 import 'package:smarttrip_ai/modules/home/screens/explore_more_destinations_screen.dart';
 import 'package:smarttrip_ai/modules/home/services/home_destination_image_cache.dart';
 import 'package:smarttrip_ai/modules/home/services/home_destination_image_loader.dart';
 import 'package:smarttrip_ai/modules/home/widgets/add_itinerary_popup.dart';
 import 'package:smarttrip_ai/modules/home/widgets/home_destination_card.dart';
-import 'package:smarttrip_ai/modules/saved_itineraries/screens/saved_trips_screen.dart';
 import 'package:smarttrip_ai/modules/saved_itineraries/services/saved_itinerary_store.dart';
 import 'package:smarttrip_ai/modules/settings/screens/settings_screen.dart';
+import 'package:smarttrip_ai/modules/trending_places/models/trending_place.dart';
+import 'package:smarttrip_ai/modules/trending_places/services/trending_places_service.dart';
 import 'package:smarttrip_ai/modules/user/services/auth_service.dart';
 import 'package:smarttrip_ai/theme/app_colors.dart';
 import 'package:smarttrip_ai/theme/app_theme_controller.dart';
@@ -26,12 +28,16 @@ class HomeScreen extends StatefulWidget {
     this.imageLoader,
     this.imageCache,
     this.savedItineraryStore,
+    this.placesService,
+    this.feedbackService,
   });
 
   final AuthServiceBase? authService;
   final HomeDestinationImageLoader? imageLoader;
   final HomeDestinationImageCache? imageCache;
   final SavedItineraryStore? savedItineraryStore;
+  final TrendingPlacesServiceBase? placesService;
+  final FeedbackServiceBase? feedbackService;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -39,20 +45,11 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late final AuthServiceBase _authService;
+  late final TrendingPlacesServiceBase _placesService;
+  late final FeedbackServiceBase _feedbackService;
   late final AnimationController _popupAnimationController;
-
-  late final HomeDestinationImageLoader _imageLoader;
-  late final bool _ownsImageLoader;
-  late final HomeDestinationImageCache _imageCache;
   late final AnimationController _refreshBounceController;
   late final Animation<double> _refreshBounceScale;
-  late final SavedItineraryStore _savedItineraryStore;
-
-  late final List<HomeDestination> _destinations;
-
-  final Map<String, String?> _destinationImages = <String, String?>{};
-  final Map<String, String?> _destinationImageBytes = <String, String?>{};
-  final Set<String> _loadingDestinationIds = <String>{};
 
   bool _isPopupOpen = false;
   bool _isOpeningPopup = false;
@@ -65,15 +62,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.initState();
 
     _authService = widget.authService ?? AuthService();
-    _destinations = kHomeDestinations
-        .where((HomeDestination destination) => destination.showOnHome)
-        .toList(growable: false);
-    _savedItineraryStore =
-        widget.savedItineraryStore ?? SharedPrefsSavedItineraryStore();
-
-    _ownsImageLoader = widget.imageLoader == null;
-    _imageLoader = widget.imageLoader ?? PexelsHomeDestinationImageLoader();
-    _imageCache = widget.imageCache ?? SharedPrefsHomeDestinationImageCache();
+    _placesService = widget.placesService ?? TrendingPlacesService();
+    _feedbackService = widget.feedbackService ?? FeedbackService();
 
     _popupAnimationController = AnimationController(
       vsync: this,
@@ -101,138 +91,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         weight: 55,
       ),
     ]).animate(_refreshBounceController);
-
-    unawaited(_loadCachedAndRemoteImages());
   }
 
   @override
   void dispose() {
-    if (_ownsImageLoader) {
-      _imageLoader.dispose();
-    }
     _refreshBounceController.dispose();
     _popupAnimationController.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadCachedAndRemoteImages() async {
-    final Map<String, HomeCachedImage> cachedImages = await _imageCache
-        .loadCachedImages();
-    if (!mounted) {
-      return;
-    }
-
-    final Map<String, String> missingByteBackfill = <String, String>{};
-    if (cachedImages.isNotEmpty) {
-      setState(() {
-        for (final HomeDestination destination in _destinations) {
-          final HomeCachedImage? cached = cachedImages[destination.id];
-          final String? cachedUrl = cached?.imageUrl;
-          final String? cachedBytes = cached?.imageBytesBase64;
-          if (cachedUrl != null && cachedUrl.isNotEmpty) {
-            _destinationImages[destination.id] = cachedUrl;
-          }
-          if (cachedBytes != null && cachedBytes.isNotEmpty) {
-            _destinationImageBytes[destination.id] = cachedBytes;
-          } else if (cachedUrl != null && cachedUrl.isNotEmpty) {
-            missingByteBackfill[destination.id] = cachedUrl;
-          }
-        }
-      });
-    }
-
-    for (final MapEntry<String, String> entry in missingByteBackfill.entries) {
-      unawaited(_backfillCachedBytes(entry.key, entry.value));
-    }
-
-    _loadDestinationImages();
-  }
-
-  Future<void> _backfillCachedBytes(
-    String destinationId,
-    String imageUrl,
-  ) async {
-    if (_destinationImageBytes[destinationId]?.trim().isNotEmpty == true) {
-      return;
-    }
-    final String? imageBytesBase64 = await _imageLoader.downloadImageAsBase64(
-      imageUrl,
-    );
-    if (imageBytesBase64 == null || imageBytesBase64.trim().isEmpty) {
-      return;
-    }
-
-    await _imageCache.saveImage(
-      destinationId: destinationId,
-      imageUrl: imageUrl,
-      imageBytesBase64: imageBytesBase64,
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _destinationImageBytes[destinationId] = imageBytesBase64;
-    });
-  }
-
-  void _loadDestinationImages() {
-    for (final HomeDestination destination in _destinations) {
-      unawaited(_loadDestinationImage(destination));
-    }
-  }
-
-  bool _hasImageData(String destinationId) {
-    final String? imageUrl = _destinationImages[destinationId]?.trim();
-    final String? imageBytes = _destinationImageBytes[destinationId]?.trim();
-    return (imageUrl != null && imageUrl.isNotEmpty) ||
-        (imageBytes != null && imageBytes.isNotEmpty);
-  }
-
-  Future<void> _loadDestinationImage(
-    HomeDestination destination, {
-    bool force = false,
-  }) async {
-    if (_loadingDestinationIds.contains(destination.id) ||
-        (!force && _hasImageData(destination.id))) {
-      return;
-    }
-
-    if (mounted) {
-      setState(() => _loadingDestinationIds.add(destination.id));
-    }
-
-    final String? imageUrl = await _imageLoader.fetchImageUrl(destination);
-    if (!mounted || imageUrl == null || imageUrl.trim().isEmpty) {
-      if (mounted) {
-        setState(() => _loadingDestinationIds.remove(destination.id));
-      }
-      return;
-    }
-
-    final String normalizedUrl = imageUrl.trim();
-    final String? imageBytesBase64 = await _imageLoader.downloadImageAsBase64(
-      normalizedUrl,
-    );
-
-    await _imageCache.saveImage(
-      destinationId: destination.id,
-      imageUrl: normalizedUrl,
-      imageBytesBase64: imageBytesBase64,
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _loadingDestinationIds.remove(destination.id);
-      _destinationImages[destination.id] = normalizedUrl;
-      if (imageBytesBase64 != null && imageBytesBase64.isNotEmpty) {
-        _destinationImageBytes[destination.id] = imageBytesBase64;
-      }
-    });
   }
 
   Future<void> _refreshHomeContent() async {
@@ -242,17 +107,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     setState(() => _isRefreshing = true);
     await _refreshBounceController.forward(from: 0);
-
-    final List<Future<void>> requests = <Future<void>>[];
-    for (final HomeDestination destination in _destinations) {
-      if (_hasImageData(destination.id)) {
-        continue;
-      }
-      requests.add(_loadDestinationImage(destination, force: true));
-    }
-    if (requests.isNotEmpty) {
-      await Future.wait(requests);
-    }
+    await Future<void>.delayed(const Duration(milliseconds: 250));
 
     if (mounted) {
       setState(() => _isRefreshing = false);
@@ -322,31 +177,46 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _openExploreMore() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => ExploreMoreDestinationsScreen(
-          destinations: _destinations,
-          initialImageUrls: _destinationImages,
-          imageLoader: _imageLoader,
+        builder: (_) =>
+            ExploreMoreDestinationsScreen(placesService: _placesService),
+      ),
+    );
+  }
+
+  void _openNotifications() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => NotificationsScreen(
+          authService: _authService,
+          feedbackService: _feedbackService,
         ),
       ),
     );
   }
 
-  void _openMyItems() {
+  void _openFeedback() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => SavedTripsScreen(store: _savedItineraryStore),
+        builder: (_) => FeedbackScreen(
+          authService: _authService,
+          feedbackService: _feedbackService,
+        ),
       ),
     );
   }
 
-  void _openDestinationDetail(HomeDestination destination) {
-    Navigator.of(context).push(
-      buildDestinationDetailRoute(
-        destination: destination,
-        imageUrl: _destinationImages[destination.id],
-        imageBytesBase64: _destinationImageBytes[destination.id],
-      ),
-    );
+  void _openPlaceDetail(TrendingPlace place) {
+    Navigator.of(
+      context,
+    ).push(buildDestinationDetailRoute(place: place, imageUrl: place.imageUrl));
+  }
+
+  Stream<int> _watchUnreadNotifications() {
+    final String? userId = _authService.currentUserId;
+    if (userId == null || userId.isEmpty) {
+      return Stream<int>.value(0);
+    }
+    return _feedbackService.watchUnreadReplyCount(userId);
   }
 
   @override
@@ -361,6 +231,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         final Color titleColor = isDarkMode
             ? AppColors.accentGreen
             : AppColors.primaryGreen;
+        final Color cardColor = isDarkMode
+            ? AppColors.darkSurface
+            : Colors.white;
+        final Color borderColor = isDarkMode
+            ? AppColors.darkBorder
+            : const Color(0x338DA180);
 
         final String username = formatHomeUsername(
           _authService.currentUserEmail,
@@ -465,68 +341,127 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      GridView.builder(
-                        key: const Key('home_destination_grid'),
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _destinations.length,
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              crossAxisSpacing: 12,
-                              mainAxisSpacing: 12,
-                              childAspectRatio: 0.92,
-                            ),
-                        itemBuilder: (BuildContext context, int index) {
-                          final HomeDestination destination =
-                              _destinations[index];
-                          return HomeDestinationCard(
-                            key: Key('home_destination_card_${destination.id}'),
-                            destination: destination,
-                            imageUrl: _destinationImages[destination.id],
-                            imageBytesBase64:
-                                _destinationImageBytes[destination.id],
-                            showLoading: _loadingDestinationIds.contains(
-                              destination.id,
-                            ),
-                            heroTag: homeDestinationHeroTag(destination.id),
-                            onTap: () => _openDestinationDetail(destination),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 14),
-                      if (_isRefreshing)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: LinearProgressIndicator(
-                            minHeight: 3,
-                            color: titleColor,
-                            backgroundColor: titleColor.withValues(alpha: 0.22),
-                          ),
-                        ),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          key: const Key('home_explore_more_button'),
-                          onPressed: _openExploreMore,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: titleColor,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: const Text(
-                            'Explore More',
-                            style: TextStyle(
-                              fontFamily: 'Times New Roman',
-                              fontSize: 20,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
+                      StreamBuilder<List<TrendingPlace>>(
+                        stream: _placesService.watchTrendingPlaces(),
+                        builder:
+                            (
+                              BuildContext context,
+                              AsyncSnapshot<List<TrendingPlace>> snapshot,
+                            ) {
+                              if (snapshot.hasError) {
+                                return _HomeStateCard(
+                                  icon: Icons.cloud_off_outlined,
+                                  title: 'Unable to load places',
+                                  message:
+                                      'Check your connection and try again.',
+                                  primaryTextColor: titleColor,
+                                  backgroundColor: cardColor,
+                                  borderColor: borderColor,
+                                );
+                              }
+
+                              if (snapshot.connectionState ==
+                                      ConnectionState.waiting &&
+                                  snapshot.data == null) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 50),
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      color: titleColor,
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              final List<TrendingPlace> places =
+                                  snapshot.data ?? <TrendingPlace>[];
+                              if (places.isEmpty) {
+                                return _HomeStateCard(
+                                  icon: Icons.travel_explore_outlined,
+                                  title: 'No popular places yet',
+                                  message:
+                                      'Admin-added destinations will appear here.',
+                                  primaryTextColor: titleColor,
+                                  backgroundColor: cardColor,
+                                  borderColor: borderColor,
+                                );
+                              }
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: <Widget>[
+                                  GridView.builder(
+                                    key: const Key('home_destination_grid'),
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    itemCount: places.length,
+                                    gridDelegate:
+                                        const SliverGridDelegateWithFixedCrossAxisCount(
+                                          crossAxisCount: 2,
+                                          crossAxisSpacing: 12,
+                                          mainAxisSpacing: 12,
+                                          childAspectRatio: 0.92,
+                                        ),
+                                    itemBuilder:
+                                        (BuildContext context, int index) {
+                                          final TrendingPlace place =
+                                              places[index];
+                                          return HomeDestinationCard(
+                                            key: Key(
+                                              'home_destination_card_${place.id}',
+                                            ),
+                                            place: place,
+                                            imageUrl: place.imageUrl,
+                                            showLoading: false,
+                                            heroTag: trendingPlaceHeroTag(
+                                              place.id,
+                                            ),
+                                            onTap: () =>
+                                                _openPlaceDetail(place),
+                                          );
+                                        },
+                                  ),
+                                  const SizedBox(height: 14),
+                                  if (_isRefreshing)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 12,
+                                      ),
+                                      child: LinearProgressIndicator(
+                                        minHeight: 3,
+                                        color: titleColor,
+                                        backgroundColor: titleColor.withValues(
+                                          alpha: 0.22,
+                                        ),
+                                      ),
+                                    ),
+                                  ElevatedButton(
+                                    key: const Key('home_explore_more_button'),
+                                    onPressed: _openExploreMore,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: titleColor,
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 14,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: const Text(
+                                      'Explore More',
+                                      style: TextStyle(
+                                        fontFamily: 'Times New Roman',
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
                       ),
                     ],
                   ),
@@ -534,11 +469,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
-          bottomNavigationBar: _HomeBottomNavigationBar(
-            onAddPressed: _showAddPopup,
-            onMyItemsPressed: _openMyItems,
-            onSettingsPressed: _openSettings,
-            isPopupOpen: _isPopupOpen,
+          bottomNavigationBar: StreamBuilder<int>(
+            stream: _watchUnreadNotifications(),
+            initialData: 0,
+            builder: (BuildContext context, AsyncSnapshot<int> snapshot) {
+              return _HomeBottomNavigationBar(
+                onAddPressed: _showAddPopup,
+                onNotificationsPressed: _openNotifications,
+                onFeedbackPressed: _openFeedback,
+                onSettingsPressed: _openSettings,
+                notificationBadgeCount: snapshot.data ?? 0,
+                isPopupOpen: _isPopupOpen,
+              );
+            },
           ),
         );
       },
@@ -657,17 +600,80 @@ class _PromoBanner extends StatelessWidget {
   }
 }
 
+class _HomeStateCard extends StatelessWidget {
+  const _HomeStateCard({
+    required this.icon,
+    required this.title,
+    required this.message,
+    required this.primaryTextColor,
+    required this.backgroundColor,
+    required this.borderColor,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final Color primaryTextColor;
+  final Color backgroundColor;
+  final Color borderColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: borderColor),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 28, 20, 28),
+        child: Column(
+          children: <Widget>[
+            Icon(icon, color: primaryTextColor, size: 42),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: primaryTextColor,
+                fontFamily: 'Times New Roman',
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: primaryTextColor.withValues(alpha: 0.68),
+                fontFamily: 'Times New Roman',
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _HomeBottomNavigationBar extends StatelessWidget {
   const _HomeBottomNavigationBar({
     required this.onAddPressed,
-    required this.onMyItemsPressed,
+    required this.onNotificationsPressed,
+    required this.onFeedbackPressed,
     required this.onSettingsPressed,
+    required this.notificationBadgeCount,
     required this.isPopupOpen,
   });
 
   final VoidCallback onAddPressed;
-  final VoidCallback onMyItemsPressed;
+  final VoidCallback onNotificationsPressed;
+  final VoidCallback onFeedbackPressed;
   final VoidCallback onSettingsPressed;
+  final int notificationBadgeCount;
   final bool isPopupOpen;
 
   @override
@@ -697,11 +703,14 @@ class _HomeBottomNavigationBar extends StatelessWidget {
                   selected: true,
                 ),
               ),
-              const Expanded(
+              Expanded(
                 child: _BottomNavItem(
+                  key: const Key('home_notifications_nav'),
                   icon: Icons.chat_bubble_outline,
                   selectedIcon: Icons.chat_bubble,
                   label: 'Notification',
+                  badgeCount: notificationBadgeCount,
+                  onTap: onNotificationsPressed,
                 ),
               ),
               Expanded(
@@ -739,11 +748,11 @@ class _HomeBottomNavigationBar extends StatelessWidget {
               ),
               Expanded(
                 child: _BottomNavItem(
-                  key: const Key('home_my_items_nav'),
-                  icon: Icons.menu_book_outlined,
-                  selectedIcon: Icons.menu_book,
-                  label: 'My Items',
-                  onTap: onMyItemsPressed,
+                  key: const Key('home_feedback_nav'),
+                  icon: Icons.rate_review_outlined,
+                  selectedIcon: Icons.rate_review,
+                  label: 'Feedback',
+                  onTap: onFeedbackPressed,
                 ),
               ),
               Expanded(
@@ -770,6 +779,7 @@ class _BottomNavItem extends StatelessWidget {
     this.selectedIcon,
     required this.label,
     this.selected = false,
+    this.badgeCount = 0,
     this.onTap,
   });
 
@@ -777,6 +787,7 @@ class _BottomNavItem extends StatelessWidget {
   final IconData? selectedIcon;
   final String label;
   final bool selected;
+  final int badgeCount;
   final VoidCallback? onTap;
 
   @override
@@ -814,11 +825,38 @@ class _BottomNavItem extends StatelessWidget {
                           ),
                         );
                       },
-                  child: Icon(
-                    activeIcon,
+                  child: Stack(
                     key: ValueKey<IconData>(activeIcon),
-                    color: color,
-                    size: 28,
+                    clipBehavior: Clip.none,
+                    children: <Widget>[
+                      Icon(activeIcon, color: color, size: 28),
+                      if (badgeCount > 0)
+                        Positioned(
+                          right: -10,
+                          top: -7,
+                          child: Container(
+                            constraints: const BoxConstraints(
+                              minWidth: 18,
+                              minHeight: 18,
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            decoration: const BoxDecoration(
+                              color: Colors.redAccent,
+                              shape: BoxShape.circle,
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              badgeCount > 9 ? '9+' : badgeCount.toString(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                height: 1,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -831,7 +869,11 @@ class _BottomNavItem extends StatelessWidget {
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
-                  child: Text(label),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),

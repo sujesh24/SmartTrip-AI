@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:smarttrip_ai/modules/home/models/home_destination.dart';
 import 'package:smarttrip_ai/modules/home/widgets/destination_image_view.dart';
+import 'package:smarttrip_ai/modules/trending_places/models/trending_place.dart';
 import 'package:smarttrip_ai/theme/app_colors.dart';
 
 Route<void> buildDestinationDetailRoute({
-  required HomeDestination destination,
+  required TrendingPlace place,
   String? imageUrl,
   String? imageBytesBase64,
 }) {
@@ -13,7 +13,7 @@ Route<void> buildDestinationDetailRoute({
     reverseTransitionDuration: const Duration(milliseconds: 240),
     pageBuilder: (BuildContext context, Animation<double> animation, _) {
       return DestinationDetailScreen(
-        destination: destination,
+        place: place,
         imageUrl: imageUrl,
         imageBytesBase64: imageBytesBase64,
       );
@@ -37,12 +37,12 @@ Route<void> buildDestinationDetailRoute({
 class DestinationDetailScreen extends StatelessWidget {
   const DestinationDetailScreen({
     super.key,
-    required this.destination,
+    required this.place,
     this.imageUrl,
     this.imageBytesBase64,
   });
 
-  final HomeDestination destination;
+  final TrendingPlace place;
   final String? imageUrl;
   final String? imageBytesBase64;
 
@@ -72,9 +72,9 @@ class DestinationDetailScreen extends StatelessWidget {
                 fit: StackFit.expand,
                 children: <Widget>[
                   Hero(
-                    tag: homeDestinationHeroTag(destination.id),
+                    tag: trendingPlaceHeroTag(place.id),
                     child: DestinationImageView(
-                      destinationId: destination.id,
+                      destinationId: place.id,
                       imageUrl: imageUrl,
                       imageBytesBase64: imageBytesBase64,
                     ),
@@ -93,7 +93,7 @@ class DestinationDetailScreen extends StatelessWidget {
                     right: 20,
                     bottom: 24,
                     child: Text(
-                      destination.displayName,
+                      place.displayName,
                       style: const TextStyle(
                         color: Colors.white,
                         fontFamily: 'Times New Roman',
@@ -124,7 +124,7 @@ class DestinationDetailScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      destination.displayName,
+                      place.displayName,
                       style: TextStyle(
                         color: titleColor,
                         fontFamily: 'Times New Roman',
@@ -136,7 +136,7 @@ class DestinationDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    destination.description,
+                    place.description,
                     style: TextStyle(
                       color: titleColor.withValues(alpha: 0.9),
                       fontFamily: 'Times New Roman',
@@ -153,24 +153,31 @@ class DestinationDetailScreen extends StatelessWidget {
                       _MetaChip(
                         key: const Key('destination_detail_best_time'),
                         title: 'Best Time',
-                        value: destination.bestTime,
+                        value: place.bestTime,
                         titleColor: titleColor,
                         cardColor: cardColor,
                       ),
                       _MetaChip(
                         key: const Key('destination_detail_budget'),
                         title: 'Budget',
-                        value: destination.budget,
+                        value: place.budget,
                         titleColor: titleColor,
                         cardColor: cardColor,
                       ),
                       _MetaChip(
                         key: const Key('destination_detail_rating'),
                         title: 'Rating',
-                        value: destination.rating.toStringAsFixed(1),
+                        value: place.rating.toStringAsFixed(1),
                         titleColor: titleColor,
                         cardColor: cardColor,
                       ),
+                      if (place.category.isNotEmpty)
+                        _MetaChip(
+                          title: 'Category',
+                          value: place.category,
+                          titleColor: titleColor,
+                          cardColor: cardColor,
+                        ),
                     ],
                   ),
                 ],
