@@ -1,7 +1,7 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/modules/admin/models/admin_user_profile.dart';
 import 'package:smarttrip_ai/modules/admin/services/admin_firestore_service.dart';
+import 'package:smarttrip_ai/modules/admin/common/admin_constants.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
 import 'package:smarttrip_ai/theme/app_colors.dart';
 
@@ -18,6 +18,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   late final AdminFirestoreService _firestoreService;
   final TextEditingController _searchController = TextEditingController();
   final Set<String> _deletingUserIds = <String>{};
+  int _refreshVersion = 0;
   String _query = '';
 
   @override
@@ -37,57 +38,49 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
 
   void _handleSearchChanged() {
     final String nextQuery = _searchController.text.trim().toLowerCase();
-    if (nextQuery == _query) {
-      return;
-    }
+    if (nextQuery == _query) return;
     setState(() => _query = nextQuery);
   }
 
-  List<AdminUserProfile> _filterUsers(List<AdminUserProfile> users) {
-    if (_query.isEmpty) {
-      return users;
+  Future<void> _refreshUsers() async {
+    if (!mounted) {
+      return;
     }
 
+    setState(() => _refreshVersion += 1);
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+  }
+
+  List<AdminUserProfile> _filterUsers(List<AdminUserProfile> users) {
+    if (_query.isEmpty) return users;
     return users.where((AdminUserProfile user) {
+      if (AdminCredentials.isAdminEmail(user.email)) {
+        return false;
+      }
       return user.displayName.toLowerCase().contains(_query) ||
           user.email.toLowerCase().contains(_query);
     }).toList();
   }
 
   Future<void> _deleteUser(AdminUserProfile user) async {
-    if (_deletingUserIds.contains(user.id)) {
+    if (_deletingUserIds.contains(user.id)) return;
+    if (AdminCredentials.isAdminEmail(user.email)) {
       return;
     }
 
-    final bool didConfirm = await _showDeleteConfirmationDialog(user);
-    if (!didConfirm || !mounted) {
-      return;
-    }
+    final bool confirmed = await _showDeleteConfirmationDialog(user);
+    if (!confirmed || !mounted) return;
 
     setState(() => _deletingUserIds.add(user.id));
     try {
       await _firestoreService.deleteUser(user.id);
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       AppSnackBar.showSuccess(context, 'User deleted.');
-    } on FirebaseException catch (error) {
-      if (!mounted) {
-        return;
-      }
-      AppSnackBar.showError(
-        context,
-        error.message ?? 'Unable to delete user. Please check permissions.',
-      );
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
+    } on Exception catch (_) {
+      if (!mounted) return;
       AppSnackBar.showError(context, 'Unable to delete user right now.');
     } finally {
-      if (mounted) {
-        setState(() => _deletingUserIds.remove(user.id));
-      }
+      if (mounted) setState(() => _deletingUserIds.remove(user.id));
     }
   }
 
@@ -201,6 +194,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       body: SafeArea(
         top: false,
         child: StreamBuilder<List<AdminUserProfile>>(
+          key: ValueKey<int>(_refreshVersion),
           stream: _firestoreService.watchUsers(),
           builder:
               (
@@ -211,64 +205,71 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   snapshot.data ?? <AdminUserProfile>[],
                 );
 
-                return ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                  children: <Widget>[
-                    _AdminSearchField(
-                      controller: _searchController,
-                      primaryTextColor: primaryTextColor,
-                      borderColor: borderColor,
-                      fillColor: cardColor,
+                return RefreshIndicator(
+                  onRefresh: _refreshUsers,
+                  color: primaryTextColor,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
                     ),
-                    const SizedBox(height: 14),
-                    if (snapshot.hasError)
-                      _AdminStateCard(
-                        icon: Icons.cloud_off_outlined,
-                        title: 'Unable to load users',
-                        message: 'Check Firestore rules and try again.',
+                    padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+                    children: <Widget>[
+                      _AdminSearchField(
+                        controller: _searchController,
                         primaryTextColor: primaryTextColor,
-                        backgroundColor: cardColor,
                         borderColor: borderColor,
-                      )
-                    else if (snapshot.connectionState ==
-                            ConnectionState.waiting &&
-                        snapshot.data == null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 80),
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            color: primaryTextColor,
-                          ),
-                        ),
-                      )
-                    else if (users.isEmpty)
-                      _AdminStateCard(
-                        icon: Icons.person_search_rounded,
-                        title: _query.isEmpty
-                            ? 'No users found'
-                            : 'No match found',
-                        message: _query.isEmpty
-                            ? 'User documents from Firestore will appear here.'
-                            : 'Try searching by another name or email.',
-                        primaryTextColor: primaryTextColor,
-                        backgroundColor: cardColor,
-                        borderColor: borderColor,
-                      )
-                    else
-                      ...users.map(
-                        (AdminUserProfile user) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _UserCard(
-                            user: user,
-                            isDeleting: _deletingUserIds.contains(user.id),
-                            primaryTextColor: primaryTextColor,
-                            backgroundColor: cardColor,
-                            borderColor: borderColor,
-                            onDelete: () => _deleteUser(user),
-                          ),
-                        ),
+                        fillColor: cardColor,
                       ),
-                  ],
+                      const SizedBox(height: 14),
+                      if (snapshot.hasError)
+                        _AdminStateCard(
+                          icon: Icons.cloud_off_outlined,
+                          title: 'Unable to load users',
+                          message: 'Check Firestore rules and try again.',
+                          primaryTextColor: primaryTextColor,
+                          backgroundColor: cardColor,
+                          borderColor: borderColor,
+                        )
+                      else if (snapshot.connectionState ==
+                              ConnectionState.waiting &&
+                          snapshot.data == null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 80),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: primaryTextColor,
+                            ),
+                          ),
+                        )
+                      else if (users.isEmpty)
+                        _AdminStateCard(
+                          icon: Icons.person_search_rounded,
+                          title: _query.isEmpty
+                              ? 'No users found'
+                              : 'No match found',
+                          message: _query.isEmpty
+                              ? 'User documents from Firestore will appear here.'
+                              : 'Try searching by another name or email.',
+                          primaryTextColor: primaryTextColor,
+                          backgroundColor: cardColor,
+                          borderColor: borderColor,
+                        )
+                      else
+                        ...users.map(
+                          (AdminUserProfile user) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _UserCard(
+                              user: user,
+                              isDeleting: _deletingUserIds.contains(user.id),
+                              primaryTextColor: primaryTextColor,
+                              backgroundColor: cardColor,
+                              borderColor: borderColor,
+                              onDelete: () => _deleteUser(user),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 );
               },
         ),
@@ -492,10 +493,7 @@ class _AdminStateCard extends StatelessWidget {
 }
 
 String _formatDate(DateTime? date) {
-  if (date == null) {
-    return 'Not available';
-  }
-
+  if (date == null) return 'Not available';
   final DateTime localDate = date.toLocal();
   final String month = localDate.month.toString().padLeft(2, '0');
   final String day = localDate.day.toString().padLeft(2, '0');

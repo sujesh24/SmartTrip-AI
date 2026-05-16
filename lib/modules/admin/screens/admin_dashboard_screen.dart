@@ -1,11 +1,12 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/modules/admin/screens/manage_feedback_screen.dart';
 import 'package:smarttrip_ai/modules/admin/screens/manage_trending_places_screen.dart';
 import 'package:smarttrip_ai/modules/admin/screens/manage_users_screen.dart';
+import 'package:smarttrip_ai/modules/admin/screens/manage_generated_places_screen.dart';
+import 'package:smarttrip_ai/modules/admin/screens/admin_settings_screen.dart';
 import 'package:smarttrip_ai/modules/admin/services/admin_session_service.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
-import 'package:smarttrip_ai/modules/trending_places/services/trending_places_service.dart';
-import 'package:smarttrip_ai/modules/user/screens/login_screen.dart';
 import 'package:smarttrip_ai/modules/user/services/auth_service.dart';
 import 'package:smarttrip_ai/theme/app_colors.dart';
 
@@ -24,17 +25,7 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-  late final AdminSessionService _sessionService;
-  late final TrendingPlacesServiceBase _placesService;
-  bool _isLoggingOut = false;
-  bool _isSeedingPlaces = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _sessionService = widget.sessionService ?? AdminSessionService();
-    _placesService = TrendingPlacesService();
-  }
+  int _refreshVersion = 0;
 
   void _openManageUsers() {
     Navigator.of(
@@ -56,62 +47,177 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Future<void> _seedPopularPlaces() async {
-    if (_isSeedingPlaces) {
+  void _openManageGeneratedPlaces() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const ManageGeneratedPlacesScreen(),
+      ),
+    );
+  }
+
+  void _openAdminSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AdminSettingsScreen(authService: widget.authService),
+      ),
+    );
+  }
+
+  Future<void> _refreshDashboard() async {
+    if (!mounted) {
       return;
     }
 
-    setState(() => _isSeedingPlaces = true);
+    setState(() => _refreshVersion += 1);
     try {
-      final int createdCount = await _placesService.seedDefaultTrendingPlaces();
-      if (!mounted) {
-        return;
-      }
-      AppSnackBar.showSuccess(
-        context,
-        createdCount == 0
-            ? 'Default places already exist. No new places added.'
-            : 'Seeded $createdCount new popular places.',
-      );
+      await Future.wait(<Future<void>>[
+        FirebaseFirestore.instance
+            .collection('users')
+            .limit(1)
+            .get()
+            .then((_) {}),
+        FirebaseFirestore.instance
+            .collection('feedback')
+            .limit(1)
+            .get()
+            .then((_) {}),
+        FirebaseFirestore.instance
+            .collection('trending_places')
+            .limit(1)
+            .get()
+            .then((_) {}),
+        FirebaseFirestore.instance
+            .collection('generated_places')
+            .limit(1)
+            .get()
+            .then((_) {}),
+      ]);
     } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      AppSnackBar.showError(context, 'Unable to seed popular places.');
-    } finally {
-      if (mounted) {
-        setState(() => _isSeedingPlaces = false);
-      }
+      // Keep pull-to-refresh silent when offline or blocked by rules.
     }
   }
 
-  Future<void> _logout() async {
-    if (_isLoggingOut) {
+  Future<void> _openBroadcastDialog() async {
+    final TextEditingController titleController = TextEditingController();
+    final TextEditingController messageController = TextEditingController();
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final Color dialogBackground = isDarkMode
+        ? AppColors.darkSurface
+        : AppColors.lightBackground;
+    final Color primaryTextColor = isDarkMode
+        ? AppColors.accentGreen
+        : AppColors.primaryGreen;
+    final Color borderColor = isDarkMode
+        ? AppColors.darkBorder
+        : AppColors.borderGreen;
+
+    final _BroadcastDraft? draft = await showDialog<_BroadcastDraft>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          backgroundColor: dialogBackground,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(color: borderColor, width: 1.2),
+          ),
+          title: Text(
+            'Broadcast to Users',
+            style: TextStyle(
+              color: primaryTextColor,
+              fontFamily: 'Times New Roman',
+              fontSize: 28,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              TextField(
+                controller: titleController,
+                cursorColor: primaryTextColor,
+                decoration: const InputDecoration(labelText: 'Title'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: messageController,
+                minLines: 3,
+                maxLines: 5,
+                cursorColor: primaryTextColor,
+                decoration: const InputDecoration(labelText: 'Message'),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final String title = titleController.text.trim();
+                final String message = messageController.text.trim();
+                if (title.isEmpty || message.isEmpty) {
+                  AppSnackBar.showError(
+                    dialogContext,
+                    'Title and message are required.',
+                  );
+                  return;
+                }
+
+                FocusManager.instance.primaryFocus?.unfocus();
+                Navigator.of(
+                  dialogContext,
+                ).pop(_BroadcastDraft(title: title, message: message));
+              },
+              child: const Text('Send'),
+            ),
+          ],
+        );
+      },
+    );
+
+    titleController.dispose();
+    messageController.dispose();
+
+    if (draft == null || !mounted) {
       return;
     }
 
-    setState(() => _isLoggingOut = true);
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted) {
+      return;
+    }
+
     try {
-      await _sessionService.clearAdminSession();
-      await widget.authService.signOut();
+      await FirebaseFirestore.instance
+          .collection('announcements')
+          .add(<String, Object?>{
+            'title': draft.title,
+            'message': draft.message,
+            'created_at': FieldValue.serverTimestamp(),
+            'createdAt': FieldValue.serverTimestamp(),
+            'created_by': widget.authService.currentUserEmail ?? '',
+            'created_by_user_id': widget.authService.currentUserId ?? '',
+            'is_active': true,
+          });
       if (!mounted) {
         return;
       }
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute<void>(
-          builder: (_) => LoginScreen(authService: widget.authService),
-        ),
-        (Route<dynamic> route) => false,
+      AppSnackBar.showSuccess(context, 'Broadcast sent to users.');
+    } on FirebaseException catch (error) {
+      debugPrint('Unable to send broadcast: ${error.code} ${error.message}');
+      if (!mounted) {
+        return;
+      }
+      AppSnackBar.showError(
+        context,
+        error.message ?? 'Unable to send broadcast. Check Firestore rules.',
       );
     } catch (_) {
       if (!mounted) {
         return;
       }
-      AppSnackBar.showError(context, 'Unable to logout. Please try again.');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoggingOut = false);
-      }
+      AppSnackBar.showError(context, 'Unable to send broadcast.');
     }
   }
 
@@ -146,15 +252,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
         actions: <Widget>[
           IconButton(
-            tooltip: 'Logout',
-            onPressed: _isLoggingOut ? null : _logout,
-            icon: _isLoggingOut
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Icon(Icons.logout_rounded, color: primaryTextColor),
+            tooltip: 'Settings',
+            onPressed: _openAdminSettings,
+            icon: Icon(Icons.settings_rounded, color: primaryTextColor),
           ),
           const SizedBox(width: 8),
         ],
@@ -163,68 +263,90 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         top: false,
         child: LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
-            final int crossAxisCount = constraints.maxWidth >= 720 ? 3 : 2;
-            return GridView.count(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              crossAxisCount: crossAxisCount,
-              crossAxisSpacing: 14,
-              mainAxisSpacing: 14,
-              childAspectRatio: constraints.maxWidth < 380 ? 0.95 : 1.08,
-              children: <Widget>[
-                _DashboardCard(
-                  title: 'Manage Users',
-                  subtitle: 'Search, review, and remove user records',
-                  icon: Icons.people_alt_outlined,
-                  backgroundColor: cardColor,
-                  borderColor: borderColor,
-                  primaryTextColor: primaryTextColor,
-                  onTap: _openManageUsers,
+            final bool compact = constraints.maxWidth < 520;
+            final int crossAxisCount = compact
+                ? 1
+                : constraints.maxWidth >= 720
+                ? 3
+                : 2;
+            return RefreshIndicator(
+              onRefresh: _refreshDashboard,
+              color: primaryTextColor,
+              child: GridView.count(
+                key: ValueKey<int>(_refreshVersion),
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
                 ),
-                _DashboardCard(
-                  title: 'Trending Places',
-                  subtitle: 'Add, edit, and publish destination cards',
-                  icon: Icons.travel_explore_rounded,
-                  backgroundColor: cardColor,
-                  borderColor: borderColor,
-                  primaryTextColor: primaryTextColor,
-                  onTap: _openManageTrendingPlaces,
-                ),
-                _DashboardCard(
-                  title: 'Feedback',
-                  subtitle: 'Read ratings and reply to users',
-                  icon: Icons.rate_review_outlined,
-                  backgroundColor: cardColor,
-                  borderColor: borderColor,
-                  primaryTextColor: primaryTextColor,
-                  onTap: _openManageFeedback,
-                ),
-                _DashboardCard(
-                  title: 'Seed Places',
-                  subtitle: 'Initialize default places (skips existing)',
-                  icon: Icons.auto_awesome_motion_outlined,
-                  backgroundColor: cardColor,
-                  borderColor: borderColor,
-                  primaryTextColor: primaryTextColor,
-                  onTap: _isSeedingPlaces ? null : _seedPopularPlaces,
-                  isLoading: _isSeedingPlaces,
-                ),
-                _DashboardCard(
-                  title: 'Logout',
-                  subtitle: 'Clear the secure admin session',
-                  icon: Icons.lock_reset_rounded,
-                  backgroundColor: cardColor,
-                  borderColor: borderColor,
-                  primaryTextColor: primaryTextColor,
-                  onTap: _isLoggingOut ? null : _logout,
-                  isLoading: _isLoggingOut,
-                ),
-              ],
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                crossAxisCount: crossAxisCount,
+                crossAxisSpacing: 14,
+                mainAxisSpacing: 14,
+                childAspectRatio: compact
+                    ? 1.55
+                    : constraints.maxWidth < 380
+                    ? 1.12
+                    : 1.18,
+                children: <Widget>[
+                  _DashboardCard(
+                    title: 'Manage Users',
+                    subtitle: 'Search, review, and remove user records',
+                    icon: Icons.people_alt_outlined,
+                    backgroundColor: cardColor,
+                    borderColor: borderColor,
+                    primaryTextColor: primaryTextColor,
+                    onTap: _openManageUsers,
+                  ),
+                  _DashboardCard(
+                    title: 'Trending Places',
+                    subtitle: 'Add, edit, and publish destination cards',
+                    icon: Icons.travel_explore_rounded,
+                    backgroundColor: cardColor,
+                    borderColor: borderColor,
+                    primaryTextColor: primaryTextColor,
+                    onTap: _openManageTrendingPlaces,
+                  ),
+                  _DashboardCard(
+                    title: 'Feedback',
+                    subtitle: 'Read ratings and reply to users',
+                    icon: Icons.rate_review_outlined,
+                    backgroundColor: cardColor,
+                    borderColor: borderColor,
+                    primaryTextColor: primaryTextColor,
+                    onTap: _openManageFeedback,
+                  ),
+                  _DashboardCard(
+                    title: 'Broadcast',
+                    subtitle: 'Send one announcement to all users',
+                    icon: Icons.campaign_outlined,
+                    backgroundColor: cardColor,
+                    borderColor: borderColor,
+                    primaryTextColor: primaryTextColor,
+                    onTap: _openBroadcastDialog,
+                  ),
+                  _DashboardCard(
+                    title: 'Generated Places',
+                    subtitle: 'Review AI-generated places from users',
+                    icon: Icons.public_rounded,
+                    backgroundColor: cardColor,
+                    borderColor: borderColor,
+                    primaryTextColor: primaryTextColor,
+                    onTap: _openManageGeneratedPlaces,
+                  ),
+                ],
+              ),
             );
           },
         ),
       ),
     );
   }
+}
+
+class _BroadcastDraft {
+  const _BroadcastDraft({required this.title, required this.message});
+
+  final String title;
+  final String message;
 }
 
 class _DashboardCard extends StatelessWidget {
@@ -236,7 +358,6 @@ class _DashboardCard extends StatelessWidget {
     required this.borderColor,
     required this.primaryTextColor,
     required this.onTap,
-    this.isLoading = false,
   });
 
   final String title;
@@ -246,7 +367,6 @@ class _DashboardCard extends StatelessWidget {
   final Color borderColor;
   final Color primaryTextColor;
   final VoidCallback? onTap;
-  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -280,17 +400,9 @@ class _DashboardCard extends StatelessWidget {
                     color: primaryTextColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: isLoading
-                      ? Padding(
-                          padding: const EdgeInsets.all(13),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: primaryTextColor,
-                          ),
-                        )
-                      : Icon(icon, color: primaryTextColor, size: 27),
+                  child: Icon(icon, color: primaryTextColor, size: 27),
                 ),
-                const Spacer(),
+                const SizedBox(height: 14),
                 Text(
                   title,
                   maxLines: 2,
@@ -298,7 +410,7 @@ class _DashboardCard extends StatelessWidget {
                   style: TextStyle(
                     color: primaryTextColor,
                     fontFamily: 'Times New Roman',
-                    fontSize: 23,
+                    fontSize: 20,
                     fontWeight: FontWeight.w600,
                     height: 1,
                   ),
@@ -306,12 +418,12 @@ class _DashboardCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   subtitle,
-                  maxLines: 3,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: primaryTextColor.withValues(alpha: 0.68),
                     fontFamily: 'Times New Roman',
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.w500,
                     height: 1.18,
                   ),

@@ -1,17 +1,25 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
+import 'package:smarttrip_ai/modules/storage/storage_service.dart';
 import 'package:smarttrip_ai/modules/trending_places/models/trending_place.dart';
 import 'package:smarttrip_ai/modules/trending_places/services/trending_places_service.dart';
-import 'package:smarttrip_ai/modules/storage/storage_service.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:smarttrip_ai/theme/app_colors.dart';
 
 class AddEditPlaceScreen extends StatefulWidget {
-  const AddEditPlaceScreen({super.key, this.place, this.placesService});
+  const AddEditPlaceScreen({
+    super.key,
+    this.place,
+    this.placesService,
+    this.storageService,
+  });
 
   final TrendingPlace? place;
   final TrendingPlacesServiceBase? placesService;
+  final StorageService? storageService;
 
   @override
   State<AddEditPlaceScreen> createState() => _AddEditPlaceScreenState();
@@ -29,8 +37,9 @@ class _AddEditPlaceScreenState extends State<AddEditPlaceScreen> {
   final TextEditingController _categoryController = TextEditingController();
 
   late final TrendingPlacesServiceBase _placesService;
+  late final StorageService _storageService;
+  XFile? _pickedImageFile;
   bool _isSaving = false;
-  bool _isUploading = false;
 
   bool get _isEditing => widget.place != null;
 
@@ -38,6 +47,7 @@ class _AddEditPlaceScreenState extends State<AddEditPlaceScreen> {
   void initState() {
     super.initState();
     _placesService = widget.placesService ?? TrendingPlacesService();
+    _storageService = widget.storageService ?? StorageService();
     final TrendingPlace? place = widget.place;
     if (place != null) {
       _nameController.text = place.name;
@@ -51,14 +61,11 @@ class _AddEditPlaceScreenState extends State<AddEditPlaceScreen> {
           : place.rating.toStringAsFixed(1);
       _categoryController.text = place.category;
     }
-    _imageUrlController.addListener(_refreshImagePreview);
   }
 
   @override
   void dispose() {
-    _imageUrlController
-      ..removeListener(_refreshImagePreview)
-      ..dispose();
+    _imageUrlController.dispose();
     _nameController.dispose();
     _countryController.dispose();
     _descriptionController.dispose();
@@ -67,40 +74,6 @@ class _AddEditPlaceScreenState extends State<AddEditPlaceScreen> {
     _ratingController.dispose();
     _categoryController.dispose();
     super.dispose();
-  }
-
-  Future<void> _pickAndUploadImage() async {
-    if (_isUploading) return;
-    final ImagePicker picker = ImagePicker();
-    final XFile? picked = await picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 2048,
-      imageQuality: 88,
-    );
-    if (picked == null) return;
-
-    setState(() => _isUploading = true);
-    try {
-      final StorageService storage = StorageService();
-      final String downloadUrl = await storage.uploadPlaceImage(
-        file: picked,
-        placeId: widget.place?.id,
-      );
-      _imageUrlController.text = downloadUrl;
-      if (mounted) {
-        AppSnackBar.showSuccess(context, 'Image uploaded.');
-      }
-    } catch (e) {
-      if (mounted) {
-        AppSnackBar.showError(context, 'Image upload failed.');
-      }
-    } finally {
-      if (mounted) setState(() => _isUploading = false);
-    }
-  }
-
-  void _refreshImagePreview() {
-    setState(() {});
   }
 
   String? _requiredValidator(String? value) {
@@ -123,27 +96,113 @@ class _AddEditPlaceScreenState extends State<AddEditPlaceScreen> {
     return null;
   }
 
+  String? _imageValidator(String? value) {
+    if (_pickedImageFile != null) {
+      return null;
+    }
+
+    final String imageUrl = value?.trim() ?? '';
+    if (imageUrl.isEmpty) {
+      return 'Required';
+    }
+
+    final Uri? uri = Uri.tryParse(_normalizeImageUrl(imageUrl));
+    if (uri == null ||
+        !uri.hasScheme ||
+        (uri.scheme != 'http' && uri.scheme != 'https' && uri.scheme != 'gs')) {
+      return 'Enter a valid image URL or pick an image';
+    }
+
+    return null;
+  }
+
+  String _normalizeImageUrl(String imageUrl) {
+    final String trimmedUrl = imageUrl.trim();
+    if (trimmedUrl.startsWith('http://') ||
+        trimmedUrl.startsWith('https://') ||
+        trimmedUrl.startsWith('gs://')) {
+      return trimmedUrl;
+    }
+
+    if (trimmedUrl.startsWith('www.')) {
+      return 'https://$trimmedUrl';
+    }
+
+    if (!trimmedUrl.contains(RegExp(r'\s')) && trimmedUrl.contains('.')) {
+      return 'https://$trimmedUrl';
+    }
+
+    return trimmedUrl;
+  }
+
+  Future<void> _pickImage() async {
+    if (_isSaving) {
+      return;
+    }
+
+    final XFile? pickedFile = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 2048,
+      imageQuality: 88,
+    );
+    if (pickedFile == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _pickedImageFile = pickedFile;
+      _imageUrlController.clear();
+    });
+  }
+
+  void _clearPickedImage() {
+    if (_isSaving) {
+      return;
+    }
+
+    setState(() => _pickedImageFile = null);
+  }
+
+  void _handleImageUrlChanged(String value) {
+    setState(() {
+      if (value.trim().isNotEmpty) {
+        _pickedImageFile = null;
+      }
+    });
+  }
+
   Future<void> _savePlace() async {
     if (_isSaving || !(_formKey.currentState?.validate() ?? false)) {
       return;
     }
 
-    final TrendingPlace place = TrendingPlace(
-      id: widget.place?.id ?? '',
-      name: _nameController.text.trim(),
-      country: _countryController.text.trim(),
-      description: _descriptionController.text.trim(),
-      imageUrl: _imageUrlController.text.trim(),
-      bestTime: _bestTimeController.text.trim(),
-      budget: _budgetController.text.trim(),
-      rating: double.parse(_ratingController.text.trim()),
-      category: _categoryController.text.trim(),
-      createdAt: widget.place?.createdAt,
-      updatedAt: widget.place?.updatedAt,
-    );
-
     setState(() => _isSaving = true);
     try {
+      String imageUrl = _normalizeImageUrl(_imageUrlController.text);
+      final XFile? pickedImageFile = _pickedImageFile;
+      if (pickedImageFile != null) {
+        imageUrl = await _storageService.uploadPlaceImage(
+          file: pickedImageFile,
+          placeId: widget.place?.id,
+        );
+      } else {
+        imageUrl = await _storageService.resolvePlaceImageUrl(imageUrl);
+      }
+
+      final TrendingPlace place = TrendingPlace(
+        id: widget.place?.id ?? '',
+        name: _nameController.text.trim(),
+        country: _countryController.text.trim(),
+        description: _descriptionController.text.trim(),
+        imageUrl: imageUrl,
+        bestTime: _bestTimeController.text.trim(),
+        budget: _budgetController.text.trim(),
+        rating: double.parse(_ratingController.text.trim()),
+        category: _categoryController.text.trim(),
+        createdAt: widget.place?.createdAt,
+        updatedAt: widget.place?.updatedAt,
+      );
+
       if (_isEditing) {
         await _placesService.updateTrendingPlace(place);
       } else {
@@ -215,43 +274,45 @@ class _AddEditPlaceScreenState extends State<AddEditPlaceScreen> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             children: <Widget>[
               _ImagePreviewCard(
-                imageUrl: _imageUrlController.text.trim(),
+                imageUrl: _normalizeImageUrl(_imageUrlController.text),
+                localImagePath: _pickedImageFile?.path,
                 primaryTextColor: primaryTextColor,
                 backgroundColor: cardColor,
                 borderColor: borderColor,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               Row(
                 children: <Widget>[
-                  Expanded(
-                    child: SizedBox(
-                      height: 44,
-                      child: ElevatedButton.icon(
-                        onPressed: _isUploading ? null : _pickAndUploadImage,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryTextColor,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        icon: _isUploading
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.upload_file_outlined),
-                        label: Text(
-                          _isUploading ? 'Uploading...' : 'Upload Image',
-                        ),
+                  ElevatedButton.icon(
+                    onPressed: _isSaving ? null : _pickImage,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryTextColor,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: const Text(
+                      'Pick Image',
+                      style: TextStyle(
+                        fontFamily: 'Times New Roman',
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
+                  if (_pickedImageFile != null) ...<Widget>[
+                    const SizedBox(width: 10),
+                    TextButton(
+                      onPressed: _isSaving ? null : _clearPickedImage,
+                      child: Text(
+                        'Use URL',
+                        style: TextStyle(
+                          color: primaryTextColor,
+                          fontFamily: 'Times New Roman',
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: 16),
@@ -297,13 +358,14 @@ class _AddEditPlaceScreenState extends State<AddEditPlaceScreen> {
                 label: 'Image URL',
                 hintText: 'https://example.com/image.jpg',
                 controller: _imageUrlController,
-                validator: _requiredValidator,
+                validator: _imageValidator,
                 primaryTextColor: primaryTextColor,
                 fillColor: cardColor,
                 borderColor: borderColor,
                 enabled: !_isSaving,
                 keyboardType: TextInputType.url,
                 textInputAction: TextInputAction.next,
+                onChanged: _handleImageUrlChanged,
               ),
               const SizedBox(height: 16),
               _AdminFormField(
@@ -404,12 +466,14 @@ class _AddEditPlaceScreenState extends State<AddEditPlaceScreen> {
 class _ImagePreviewCard extends StatelessWidget {
   const _ImagePreviewCard({
     required this.imageUrl,
+    required this.localImagePath,
     required this.primaryTextColor,
     required this.backgroundColor,
     required this.borderColor,
   });
 
   final String imageUrl;
+  final String? localImagePath;
   final Color primaryTextColor;
   final Color backgroundColor;
   final Color borderColor;
@@ -426,7 +490,16 @@ class _ImagePreviewCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: AspectRatio(
           aspectRatio: 16 / 9,
-          child: imageUrl.isEmpty
+          child: localImagePath != null && localImagePath!.isNotEmpty
+              ? Image.file(
+                  File(localImagePath!),
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _PreviewPlaceholder(
+                    primaryTextColor: primaryTextColor,
+                    message: 'Image preview unavailable',
+                  ),
+                )
+              : imageUrl.isEmpty
               ? _PreviewPlaceholder(primaryTextColor: primaryTextColor)
               : Image.network(
                   imageUrl,
@@ -508,6 +581,7 @@ class _AdminFormField extends StatelessWidget {
     this.validator,
     this.keyboardType,
     this.textInputAction,
+    this.onChanged,
     this.onFieldSubmitted,
     this.minLines = 1,
     this.maxLines = 1,
@@ -523,6 +597,7 @@ class _AdminFormField extends StatelessWidget {
   final bool enabled;
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
+  final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onFieldSubmitted;
   final int minLines;
   final int maxLines;
@@ -549,6 +624,7 @@ class _AdminFormField extends StatelessWidget {
           maxLines: maxLines,
           keyboardType: keyboardType,
           textInputAction: textInputAction,
+          onChanged: onChanged,
           onFieldSubmitted: onFieldSubmitted,
           validator: validator,
           cursorColor: primaryTextColor,

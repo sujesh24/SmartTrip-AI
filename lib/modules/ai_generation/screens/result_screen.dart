@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
 import 'package:smarttrip_ai/theme/app_colors.dart';
@@ -14,6 +16,8 @@ import 'package:smarttrip_ai/modules/home/screens/home_screen.dart';
 import 'package:smarttrip_ai/modules/saved_itineraries/models/saved_itinerary.dart';
 import 'package:smarttrip_ai/modules/saved_itineraries/screens/saved_trips_screen.dart';
 import 'package:smarttrip_ai/modules/saved_itineraries/services/saved_itinerary_store.dart';
+import 'package:smarttrip_ai/modules/ai_generation/services/generated_places_service.dart';
+import 'package:smarttrip_ai/modules/user/services/auth_service.dart';
 
 class ResultScreen extends StatefulWidget {
   const ResultScreen({
@@ -21,11 +25,15 @@ class ResultScreen extends StatefulWidget {
     required this.request,
     required this.generatedText,
     this.savedItineraryStore,
+    this.generatedPlacesService,
+    this.authService,
   });
 
   final ItineraryRequest request;
   final String generatedText;
   final SavedItineraryStore? savedItineraryStore;
+  final GeneratedPlacesServiceBase? generatedPlacesService;
+  final AuthServiceBase? authService;
 
   @override
   State<ResultScreen> createState() => _ResultScreenState();
@@ -37,6 +45,8 @@ class _ResultScreenState extends State<ResultScreen> {
 
   late final ResultViewModel _viewModel;
   final ImageService _imageService = ImageService();
+  late final GeneratedPlacesServiceBase _generatedPlacesService;
+  late final AuthServiceBase _authService;
   late final SavedItineraryStore _savedItineraryStore;
   late List<DayPlan> _dayPlans;
   late final Future<void> _placeImagesFuture;
@@ -53,8 +63,12 @@ class _ResultScreenState extends State<ResultScreen> {
     );
     _savedItineraryStore =
         widget.savedItineraryStore ?? SharedPrefsSavedItineraryStore();
+    _generatedPlacesService =
+        widget.generatedPlacesService ?? GeneratedPlacesService();
+    _authService = widget.authService ?? AuthService();
     _dayPlans = _viewModel.dayPlans;
     _placeImagesFuture = _loadPlaceImages();
+    _recordGeneratedPlace();
   }
 
   @override
@@ -247,6 +261,8 @@ class _ResultScreenState extends State<ResultScreen> {
         coverImageBase64: coverImageBase64,
       );
       await _savedItineraryStore.saveItinerary(itinerary);
+      await _recordGeneratedPlaceSave();
+
       if (!mounted) {
         return;
       }
@@ -303,6 +319,40 @@ class _ResultScreenState extends State<ResultScreen> {
       }
     }
     return null;
+  }
+
+  void _recordGeneratedPlace() {
+    final String? userId = _authService.currentUserId;
+    final String destination = _trackingDestination;
+    if (userId == null || userId.isEmpty || destination.isEmpty) {
+      return;
+    }
+
+    unawaited(
+      _generatedPlacesService.recordPlaceGeneration(
+        placeName: destination,
+        userId: userId,
+        userEmail: _authService.currentUserEmail,
+      ),
+    );
+  }
+
+  Future<void> _recordGeneratedPlaceSave() async {
+    final String? userId = _authService.currentUserId;
+    final String destination = _trackingDestination;
+    if (userId == null || userId.isEmpty || destination.isEmpty) {
+      return;
+    }
+
+    await _generatedPlacesService.recordPlaceSave(
+      placeName: destination,
+      userId: userId,
+      userEmail: _authService.currentUserEmail,
+    );
+  }
+
+  String get _trackingDestination {
+    return widget.request.destination.trim().replaceAll(RegExp(r'\s+'), ' ');
   }
 
   void _closeToHome() {

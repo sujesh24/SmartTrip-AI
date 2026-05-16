@@ -7,7 +7,7 @@ const List<TrendingPlace> kDefaultTrendingPlaces = <TrendingPlace>[
     country: 'Japan',
     description:
         'Tokyo is a vibrant metropolis where ancient traditions coexist with futuristic innovation. Visitors can explore historic temples like Senso-ji, walk through the bustling Shibuya Crossing, and experience unique districts such as Akihabara for anime culture and Ginza for luxury shopping. The city offers world-class cuisine ranging from street food to Michelin-star restaurants. With its efficient transport, clean environment, and endless attractions, Tokyo is ideal for both first-time travelers and seasoned explorers.',
-    imageUrl: '',
+    imageUrl: 'https://picsum.photos/seed/tokyo-smarttrip/1200/800',
     bestTime: 'March - May, October - November',
     budget: 'High',
     rating: 4.8,
@@ -21,7 +21,7 @@ const List<TrendingPlace> kDefaultTrendingPlaces = <TrendingPlace>[
     country: 'United Kingdom',
     description:
         'London is a city rich in heritage, culture, and modern lifestyle. From iconic landmarks like Big Ben, Tower Bridge, and Buckingham Palace to world-famous museums such as the British Museum, there is always something to explore. Visitors can enjoy theatre shows in the West End, relax in beautiful parks like Hyde Park, and experience diverse cuisines from around the world. London\'s blend of history and modernity makes it a must-visit destination.',
-    imageUrl: '',
+    imageUrl: 'https://picsum.photos/seed/london-smarttrip/1200/800',
     bestTime: 'March - May',
     budget: 'High',
     rating: 4.7,
@@ -35,7 +35,7 @@ const List<TrendingPlace> kDefaultTrendingPlaces = <TrendingPlace>[
     country: 'France',
     description:
         'Paris is renowned for its romantic charm, artistic heritage, and timeless beauty. The city is home to iconic attractions like the Eiffel Tower, Louvre Museum, and Notre-Dame Cathedral. Visitors can stroll along the Seine River, explore charming neighborhoods, and enjoy authentic French cuisine in cozy cafes. Paris also offers a vibrant shopping scene and rich cultural experiences, making it perfect for both leisure and exploration.',
-    imageUrl: '',
+    imageUrl: 'https://picsum.photos/seed/paris-smarttrip/1200/800',
     bestTime: 'April - June, September - October',
     budget: 'High',
     rating: 4.8,
@@ -49,7 +49,7 @@ const List<TrendingPlace> kDefaultTrendingPlaces = <TrendingPlace>[
     country: 'United Arab Emirates',
     description:
         'Dubai is a global city known for luxury, innovation, and architectural wonders. It features iconic attractions such as the Burj Khalifa, Palm Jumeirah, and Dubai Mall. Visitors can enjoy desert safaris, water parks, and cultural experiences in traditional souks. Dubai offers a unique mix of modern lifestyle and Arabian heritage, making it suitable for adventure seekers as well as luxury travelers.',
-    imageUrl: '',
+    imageUrl: 'https://picsum.photos/seed/dubai-smarttrip/1200/800',
     bestTime: 'November - March',
     budget: 'High',
     rating: 4.6,
@@ -63,7 +63,7 @@ const List<TrendingPlace> kDefaultTrendingPlaces = <TrendingPlace>[
     country: 'Singapore',
     description:
         'Singapore is a modern and well-organized city known for its cleanliness, greenery, and diverse culture. Key attractions include Marina Bay Sands, Gardens by the Bay, and Sentosa Island. The city is also famous for its street food, offering a wide variety of cuisines. Singapore\'s efficient public transport and safe environment make it an excellent destination for short and comfortable trips.',
-    imageUrl: '',
+    imageUrl: 'https://picsum.photos/seed/singapore-smarttrip/1200/800',
     bestTime: 'February - April',
     budget: 'Medium',
     rating: 4.7,
@@ -77,7 +77,7 @@ const List<TrendingPlace> kDefaultTrendingPlaces = <TrendingPlace>[
     country: 'India',
     description:
         'Kerala, often called "God\'s Own Country," is known for its natural beauty and peaceful environment. Visitors can enjoy houseboat cruises through the backwaters, explore lush tea plantations in Munnar, and relax on scenic beaches like Varkala. The region is also famous for Ayurvedic treatments and traditional culture. Kerala is perfect for travelers seeking relaxation, nature, and cultural experiences.',
-    imageUrl: '',
+    imageUrl: 'https://picsum.photos/seed/kerala-smarttrip/1200/800',
     bestTime: 'October - March',
     budget: 'Medium',
     rating: 4.6,

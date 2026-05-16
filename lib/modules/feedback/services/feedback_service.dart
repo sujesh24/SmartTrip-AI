@@ -19,6 +19,8 @@ abstract class FeedbackServiceBase {
   });
 
   Future<void> markFeedbackRead(String feedbackId);
+
+  Future<void> deleteFeedback(String feedbackId);
 }
 
 class FeedbackService implements FeedbackServiceBase {
@@ -91,6 +93,11 @@ class FeedbackService implements FeedbackServiceBase {
     return _collection.doc(feedbackId).set(<String, Object?>{
       'is_read': true,
     }, SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> deleteFeedback(String feedbackId) {
+    return _collection.doc(feedbackId).delete();
   }
 
   List<FeedbackEntry> _sortFeedbackSnapshot(

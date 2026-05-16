@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smarttrip_ai/modules/feedback/models/feedback_entry.dart';
+import 'package:smarttrip_ai/modules/feedback/models/user_notification.dart';
+import 'package:smarttrip_ai/modules/feedback/screens/notifications_screen.dart';
 import 'package:smarttrip_ai/modules/feedback/services/feedback_service.dart';
+import 'package:smarttrip_ai/modules/feedback/services/user_notification_service.dart';
 import 'package:smarttrip_ai/modules/home/screens/home_screen.dart';
 import 'package:smarttrip_ai/modules/settings/screens/manage_account_screen.dart';
 import 'package:smarttrip_ai/modules/settings/screens/settings_screen.dart';
@@ -123,6 +126,71 @@ void main() {
       find.byKey(const Key('home_destination_card_kerala')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('home notification badge uses merged unread count', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeScreen(
+          authService: FakeAuthService(),
+          placesService: FakeTrendingPlacesService(),
+          feedbackService: FakeFeedbackService(),
+          notificationService: FakeUserNotificationService(unreadCount: 2),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('home_notifications_nav')), findsOneWidget);
+    expect(find.text('2'), findsOneWidget);
+  });
+
+  testWidgets('notifications screen marks unread notifications read', (
+    WidgetTester tester,
+  ) async {
+    final FakeUserNotificationService notificationService =
+        FakeUserNotificationService(
+          notifications: <UserNotificationEntry>[
+            UserNotificationEntry(
+              id: 'feedback:one',
+              type: UserNotificationType.feedbackReply,
+              title: 'Admin replied',
+              message: 'Thanks for the feedback.',
+              createdAt: DateTime(2026, 5, 14),
+              isRead: false,
+              feedbackId: 'one',
+            ),
+            UserNotificationEntry(
+              id: 'announcement:two',
+              type: UserNotificationType.announcement,
+              title: 'Travel update',
+              message: 'New destinations are live.',
+              createdAt: DateTime(2026, 5, 14),
+              isRead: false,
+              announcementId: 'two',
+            ),
+          ],
+        );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NotificationsScreen(
+          authService: FakeAuthService(),
+          notificationService: notificationService,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Admin replied'), findsOneWidget);
+    expect(find.text('Travel update'), findsOneWidget);
+    expect(notificationService.markedNotificationIds, <String>[
+      'feedback:one',
+      'announcement:two',
+    ]);
   });
 
   testWidgets('explore more button opens full destinations page', (
@@ -300,12 +368,21 @@ void main() {
     WidgetTester tester,
   ) async {
     final FakeAuthService authService = FakeAuthService();
+    final Finder deleteButton = find.byKey(
+      const Key('manage_delete_account_button'),
+    );
+    final Finder accountScrollView = find.byType(Scrollable).first;
 
     await tester.pumpWidget(
       MaterialApp(home: ManageAccountScreen(authService: authService)),
     );
 
-    await tester.tap(find.byKey(const Key('manage_delete_account_button')));
+    await tester.scrollUntilVisible(
+      deleteButton,
+      80,
+      scrollable: accountScrollView,
+    );
+    await tester.tap(deleteButton);
     await tester.pumpAndSettle();
 
     ElevatedButton confirmButton = tester.widget<ElevatedButton>(
@@ -331,12 +408,21 @@ void main() {
     final FakeAuthService authService = FakeAuthService(
       deleteResult: DeleteAccountResult.success(),
     );
+    final Finder deleteButton = find.byKey(
+      const Key('manage_delete_account_button'),
+    );
+    final Finder accountScrollView = find.byType(Scrollable).first;
 
     await tester.pumpWidget(
       MaterialApp(home: ManageAccountScreen(authService: authService)),
     );
 
-    await tester.tap(find.byKey(const Key('manage_delete_account_button')));
+    await tester.scrollUntilVisible(
+      deleteButton,
+      80,
+      scrollable: accountScrollView,
+    );
+    await tester.tap(deleteButton);
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -360,12 +446,21 @@ void main() {
         message: 'Please login again.',
       ),
     );
+    final Finder deleteButton = find.byKey(
+      const Key('manage_delete_account_button'),
+    );
+    final Finder accountScrollView = find.byType(Scrollable).first;
 
     await tester.pumpWidget(
       MaterialApp(home: ManageAccountScreen(authService: authService)),
     );
 
-    await tester.tap(find.byKey(const Key('manage_delete_account_button')));
+    await tester.scrollUntilVisible(
+      deleteButton,
+      80,
+      scrollable: accountScrollView,
+    );
+    await tester.tap(deleteButton);
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -452,6 +547,11 @@ class FakeAuthService implements AuthServiceBase {
     deleteCalled = true;
     return _deleteResult;
   }
+
+  @override
+  Future<void> updateUserProfile({String? name, String? avatarPath}) async {
+    // Fake implementation does nothing.
+  }
 }
 
 class FakeSettingsPreferencesService implements SettingsPreferencesService {
@@ -531,6 +631,42 @@ class FakeFeedbackService implements FeedbackServiceBase {
 
   @override
   Future<void> markFeedbackRead(String feedbackId) async {}
+
+  @override
+  Future<void> deleteFeedback(String feedbackId) async {}
+}
+
+class FakeUserNotificationService implements UserNotificationServiceBase {
+  FakeUserNotificationService({
+    this.unreadCount = 0,
+    this.notifications = const <UserNotificationEntry>[],
+  });
+
+  final int unreadCount;
+  final List<UserNotificationEntry> notifications;
+  final List<String> markedNotificationIds = <String>[];
+
+  @override
+  Future<void> markNotificationsRead({
+    required String userId,
+    required Iterable<UserNotificationEntry> notifications,
+  }) async {
+    markedNotificationIds.addAll(
+      notifications.map((UserNotificationEntry notification) {
+        return notification.id;
+      }),
+    );
+  }
+
+  @override
+  Stream<List<UserNotificationEntry>> watchNotifications(String userId) {
+    return Stream<List<UserNotificationEntry>>.value(notifications);
+  }
+
+  @override
+  Stream<int> watchUnreadCount(String userId) {
+    return Stream<int>.value(unreadCount);
+  }
 }
 
 const List<TrendingPlace> _testTrendingPlaces = <TrendingPlace>[

@@ -1,8 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
+
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
-import 'package:smarttrip_ai/modules/feedback/models/feedback_entry.dart';
+import 'package:smarttrip_ai/modules/feedback/models/user_notification.dart';
 import 'package:smarttrip_ai/modules/feedback/services/feedback_service.dart';
+import 'package:smarttrip_ai/modules/feedback/services/user_notification_service.dart';
 import 'package:smarttrip_ai/modules/user/services/auth_service.dart';
 import 'package:smarttrip_ai/theme/app_colors.dart';
 
@@ -11,51 +13,76 @@ class NotificationsScreen extends StatefulWidget {
     super.key,
     required this.authService,
     this.feedbackService,
+    this.notificationService,
   });
 
   final AuthServiceBase authService;
   final FeedbackServiceBase? feedbackService;
+  final UserNotificationServiceBase? notificationService;
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  late final FeedbackServiceBase _feedbackService;
-  final Set<String> _markingReadIds = <String>{};
+  late final UserNotificationServiceBase _notificationService;
+  int _refreshVersion = 0;
 
   @override
   void initState() {
     super.initState();
-    _feedbackService = widget.feedbackService ?? FeedbackService();
+    final FeedbackServiceBase? feedbackService = widget.feedbackService;
+    final bool hasFirebase = Firebase.apps.isNotEmpty;
+    _notificationService =
+        widget.notificationService ??
+        (hasFirebase
+            ? FirestoreUserNotificationService(
+                feedbackService: feedbackService ?? FeedbackService(),
+              )
+            : feedbackService == null
+            ? const NoOpUserNotificationService()
+            : FeedbackOnlyUserNotificationService(service: feedbackService));
   }
 
-  Future<void> _markRead(FeedbackEntry feedback) async {
-    if (feedback.isRead || _markingReadIds.contains(feedback.id)) {
+  Future<void> _refreshNotifications() async {
+    if (!mounted) {
       return;
     }
 
-    setState(() => _markingReadIds.add(feedback.id));
-    try {
-      await _feedbackService.markFeedbackRead(feedback.id);
-    } on FirebaseException catch (error) {
-      if (!mounted) {
-        return;
-      }
-      AppSnackBar.showError(
-        context,
-        error.message ?? 'Unable to mark notification read.',
-      );
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      AppSnackBar.showError(context, 'Unable to mark notification read.');
-    } finally {
-      if (mounted) {
-        setState(() => _markingReadIds.remove(feedback.id));
-      }
+    setState(() => _refreshVersion += 1);
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+  }
+
+  void _markUnreadNotificationsRead(
+    String userId,
+    List<UserNotificationEntry> notifications,
+  ) {
+    final List<UserNotificationEntry> unreadNotifications = notifications
+        .where((UserNotificationEntry notification) => !notification.isRead)
+        .toList(growable: false);
+    if (unreadNotifications.isEmpty) {
+      return;
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(
+        _notificationService
+            .markNotificationsRead(
+              userId: userId,
+              notifications: unreadNotifications,
+            )
+            .catchError((Object error) {
+              debugPrint('Unable to mark notifications read: $error');
+            }),
+      );
+    });
+  }
+
+  Stream<List<UserNotificationEntry>> _watchNotifications(String userId) {
+    return _notificationService.watchNotifications(userId);
   }
 
   @override
@@ -95,26 +122,40 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ? _NotificationStateCard(
                 icon: Icons.login_rounded,
                 title: 'Login required',
-                message: 'Login to view reply notifications.',
+                message: 'Login to view notifications.',
                 primaryTextColor: primaryTextColor,
                 backgroundColor: cardColor,
                 borderColor: borderColor,
               )
-            : StreamBuilder<List<FeedbackEntry>>(
-                stream: _feedbackService.watchRepliedFeedbackForUser(userId),
+            : StreamBuilder<List<UserNotificationEntry>>(
+                key: ValueKey<int>(_refreshVersion),
+                stream: _watchNotifications(userId),
                 builder:
                     (
                       BuildContext context,
-                      AsyncSnapshot<List<FeedbackEntry>> snapshot,
+                      AsyncSnapshot<List<UserNotificationEntry>> snapshot,
                     ) {
                       if (snapshot.hasError) {
-                        return _NotificationStateCard(
-                          icon: Icons.cloud_off_outlined,
-                          title: 'Unable to load notifications',
-                          message: 'Check Firestore access and try again.',
-                          primaryTextColor: primaryTextColor,
-                          backgroundColor: cardColor,
-                          borderColor: borderColor,
+                        return RefreshIndicator(
+                          onRefresh: _refreshNotifications,
+                          color: primaryTextColor,
+                          child: ListView(
+                            physics: const AlwaysScrollableScrollPhysics(
+                              parent: BouncingScrollPhysics(),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 24),
+                            children: <Widget>[
+                              _NotificationStateCard(
+                                icon: Icons.cloud_off_outlined,
+                                title: 'Unable to load notifications',
+                                message:
+                                    'Check Firestore access and try again.',
+                                primaryTextColor: primaryTextColor,
+                                backgroundColor: cardColor,
+                                borderColor: borderColor,
+                              ),
+                            ],
+                          ),
                         );
                       }
 
@@ -127,40 +168,58 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         );
                       }
 
-                      final List<FeedbackEntry> notifications =
-                          snapshot.data ?? <FeedbackEntry>[];
+                      final List<UserNotificationEntry> notifications =
+                          snapshot.data ?? <UserNotificationEntry>[];
+                      _markUnreadNotificationsRead(userId, notifications);
+
                       if (notifications.isEmpty) {
-                        return _NotificationStateCard(
-                          icon: Icons.notifications_none_rounded,
-                          title: 'No notifications',
-                          message:
-                              'Admin replies to your feedback appear here.',
-                          primaryTextColor: primaryTextColor,
-                          backgroundColor: cardColor,
-                          borderColor: borderColor,
+                        return RefreshIndicator(
+                          onRefresh: _refreshNotifications,
+                          color: primaryTextColor,
+                          child: ListView(
+                            physics: const AlwaysScrollableScrollPhysics(
+                              parent: BouncingScrollPhysics(),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 24),
+                            children: <Widget>[
+                              _NotificationStateCard(
+                                icon: Icons.notifications_none_rounded,
+                                title: 'No notifications',
+                                message:
+                                    'Admin replies and broadcasts appear here.',
+                                primaryTextColor: primaryTextColor,
+                                backgroundColor: cardColor,
+                                borderColor: borderColor,
+                              ),
+                            ],
+                          ),
                         );
                       }
 
-                      return ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
-                        itemCount: notifications.length,
-                        itemBuilder: (BuildContext context, int index) {
-                          final FeedbackEntry notification =
-                              notifications[index];
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _NotificationCard(
-                              notification: notification,
-                              isMarkingRead: _markingReadIds.contains(
-                                notification.id,
+                      return RefreshIndicator(
+                        onRefresh: _refreshNotifications,
+                        color: primaryTextColor,
+                        child: ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(
+                            parent: BouncingScrollPhysics(),
+                          ),
+                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+                          itemCount: notifications.length,
+                          itemBuilder: (BuildContext context, int index) {
+                            final UserNotificationEntry notification =
+                                notifications[index];
+                            return Padding(
+                              key: ValueKey<String>(notification.id),
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _NotificationCard(
+                                notification: notification,
+                                primaryTextColor: primaryTextColor,
+                                backgroundColor: cardColor,
+                                borderColor: borderColor,
                               ),
-                              primaryTextColor: primaryTextColor,
-                              backgroundColor: cardColor,
-                              borderColor: borderColor,
-                              onMarkRead: () => _markRead(notification),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       );
                     },
               ),
@@ -172,148 +231,120 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 class _NotificationCard extends StatelessWidget {
   const _NotificationCard({
     required this.notification,
-    required this.isMarkingRead,
     required this.primaryTextColor,
     required this.backgroundColor,
     required this.borderColor,
-    required this.onMarkRead,
   });
 
-  final FeedbackEntry notification;
-  final bool isMarkingRead;
+  final UserNotificationEntry notification;
   final Color primaryTextColor;
   final Color backgroundColor;
   final Color borderColor;
-  final VoidCallback onMarkRead;
 
   @override
   Widget build(BuildContext context) {
+    final IconData icon = notification.isAnnouncement
+        ? Icons.campaign_outlined
+        : notification.isRead
+        ? Icons.mark_email_read_outlined
+        : Icons.mark_email_unread_outlined;
+
     return Material(
       color: backgroundColor,
       borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: null,
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: notification.isRead ? borderColor : primaryTextColor,
-              width: notification.isRead ? 1 : 1.3,
-            ),
+      child: Ink(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: notification.isRead ? borderColor : primaryTextColor,
+            width: notification.isRead ? 1 : 1.3,
           ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Icon(
-                      notification.isRead
-                          ? Icons.mark_email_read_outlined
-                          : Icons.mark_email_unread_outlined,
-                      color: primaryTextColor,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Admin replied',
-                        style: TextStyle(
-                          color: primaryTextColor,
-                          fontFamily: 'Times New Roman',
-                          fontSize: 21,
-                          fontWeight: FontWeight.w600,
-                          height: 1,
-                        ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Icon(icon, color: primaryTextColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      notification.title,
+                      style: TextStyle(
+                        color: primaryTextColor,
+                        fontFamily: 'Times New Roman',
+                        fontSize: 21,
+                        fontWeight: FontWeight.w600,
+                        height: 1,
                       ),
                     ),
-                    if (!notification.isRead)
-                      Container(
-                        width: 10,
-                        height: 10,
-                        decoration: const BoxDecoration(
-                          color: Colors.redAccent,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _formatDateTime(notification.replyTime),
-                  style: TextStyle(
-                    color: primaryTextColor.withValues(alpha: 0.56),
-                    fontFamily: 'Times New Roman',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
                   ),
+                  if (!notification.isRead)
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        color: Colors.redAccent,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _formatDateTime(notification.createdAt),
+                style: TextStyle(
+                  color: primaryTextColor.withValues(alpha: 0.56),
+                  fontFamily: 'Times New Roman',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
                 ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                notification.message,
+                style: TextStyle(
+                  color: primaryTextColor.withValues(alpha: 0.88),
+                  fontFamily: 'Times New Roman',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  height: 1.24,
+                ),
+              ),
+              if (notification.secondaryMessage != null) ...<Widget>[
                 const SizedBox(height: 12),
                 Text(
-                  notification.adminReply,
+                  notification.secondaryMessage!,
                   style: TextStyle(
-                    color: primaryTextColor.withValues(alpha: 0.88),
-                    fontFamily: 'Times New Roman',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    height: 1.24,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Your feedback: ${notification.message}',
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: primaryTextColor.withValues(alpha: 0.66),
+                    color: primaryTextColor.withValues(alpha: 0.7),
                     fontFamily: 'Times New Roman',
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                     height: 1.2,
                   ),
                 ),
+              ],
+              if (notification.rating != null) ...<Widget>[
                 const SizedBox(height: 10),
                 Row(
                   children: <Widget>[
-                    const Icon(Icons.star, color: Colors.amber, size: 16),
+                    Icon(Icons.star_rounded, color: Colors.amber.shade700),
                     const SizedBox(width: 4),
                     Text(
                       notification.rating.toString(),
                       style: TextStyle(
-                        color: primaryTextColor.withValues(alpha: 0.7),
+                        color: primaryTextColor.withValues(alpha: 0.72),
                         fontFamily: 'Times New Roman',
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const Spacer(),
-                    if (!notification.isRead)
-                      TextButton(
-                        onPressed: isMarkingRead ? null : onMarkRead,
-                        child: isMarkingRead
-                            ? SizedBox(
-                                width: 17,
-                                height: 17,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: primaryTextColor,
-                                ),
-                              )
-                            : Text(
-                                'Mark read',
-                                style: TextStyle(
-                                  color: primaryTextColor,
-                                  fontFamily: 'Times New Roman',
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                      ),
                   ],
                 ),
               ],
-            ),
+            ],
           ),
         ),
       ),

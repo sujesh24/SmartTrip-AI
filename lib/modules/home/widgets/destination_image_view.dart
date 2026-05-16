@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_assets.dart';
 
@@ -38,24 +39,27 @@ class DestinationImageView extends StatelessWidget {
 
     final String? sanitizedUrl = imageUrl?.trim();
     if (sanitizedUrl != null && sanitizedUrl.isNotEmpty) {
-      return Image.network(
-        sanitizedUrl,
-        fit: fit,
-        width: double.infinity,
-        height: double.infinity,
-        loadingBuilder:
-            (
-              BuildContext context,
-              Widget child,
-              ImageChunkEvent? loadingProgress,
-            ) {
-              if (loadingProgress == null) {
-                return child;
-              }
+      if (sanitizedUrl.startsWith('gs://')) {
+        return FutureBuilder<String>(
+          future: FirebaseStorage.instance
+              .refFromURL(sanitizedUrl)
+              .getDownloadURL(),
+          builder: (BuildContext context, AsyncSnapshot<String> snapshot) {
+            if (snapshot.hasError) {
+              return _buildAssetFallback();
+            }
+
+            final String? downloadUrl = snapshot.data?.trim();
+            if (downloadUrl == null || downloadUrl.isEmpty) {
               return _buildLoading();
-            },
-        errorBuilder: (_, __, ___) => _buildAssetFallback(),
-      );
+            }
+
+            return _buildNetworkImage(downloadUrl);
+          },
+        );
+      }
+
+      return _buildNetworkImage(sanitizedUrl);
     }
 
     if (showLoading) {
@@ -63,6 +67,27 @@ class DestinationImageView extends StatelessWidget {
     }
 
     return _buildAssetFallback();
+  }
+
+  Widget _buildNetworkImage(String imageUrl) {
+    return Image.network(
+      imageUrl,
+      fit: fit,
+      width: double.infinity,
+      height: double.infinity,
+      loadingBuilder:
+          (
+            BuildContext context,
+            Widget child,
+            ImageChunkEvent? loadingProgress,
+          ) {
+            if (loadingProgress == null) {
+              return child;
+            }
+            return _buildLoading();
+          },
+      errorBuilder: (_, __, ___) => _buildAssetFallback(),
+    );
   }
 
   Widget _buildLoading() {

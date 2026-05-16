@@ -17,11 +17,72 @@ class ManageFeedbackScreen extends StatefulWidget {
 class _ManageFeedbackScreenState extends State<ManageFeedbackScreen> {
   late final FeedbackServiceBase _feedbackService;
   final Set<String> _replyingIds = <String>{};
+  int _refreshVersion = 0;
 
   @override
   void initState() {
     super.initState();
     _feedbackService = widget.feedbackService ?? FeedbackService();
+  }
+
+  Future<void> _refreshFeedback() async {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() => _refreshVersion += 1);
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+  }
+
+  Future<bool> _deleteFeedback(FeedbackEntry feedback) async {
+    final bool? shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete feedback?'),
+          content: Text('Delete the feedback from ${feedback.userName}?'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true || !mounted) {
+      return false;
+    }
+
+    try {
+      await _feedbackService.deleteFeedback(feedback.id);
+      if (!mounted) {
+        return false;
+      }
+      AppSnackBar.showSuccess(context, 'Feedback deleted.');
+      return true;
+    } on FirebaseException catch (error) {
+      if (!mounted) {
+        return false;
+      }
+      AppSnackBar.showError(
+        context,
+        error.message ?? 'Unable to delete feedback right now.',
+      );
+      return false;
+    } catch (_) {
+      if (!mounted) {
+        return false;
+      }
+      AppSnackBar.showError(context, 'Unable to delete feedback right now.');
+      return false;
+    }
   }
 
   Future<void> _replyToFeedback(FeedbackEntry feedback) async {
@@ -34,11 +95,16 @@ class _ManageFeedbackScreenState extends State<ManageFeedbackScreen> {
       return;
     }
 
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted) {
+      return;
+    }
+
     setState(() => _replyingIds.add(feedback.id));
     try {
       await _feedbackService.replyToFeedback(
         feedbackId: feedback.id,
-        reply: reply,
+        reply: reply.trim(),
       );
       if (!mounted) {
         return;
@@ -144,9 +210,10 @@ class _ManageFeedbackScreenState extends State<ManageFeedbackScreen> {
               onPressed: () {
                 final String value = controller.text.trim();
                 if (value.isEmpty) {
-                  AppSnackBar.showError(context, 'Reply is required.');
+                  AppSnackBar.showError(dialogContext, 'Reply is required.');
                   return;
                 }
+                FocusManager.instance.primaryFocus?.unfocus();
                 Navigator.of(dialogContext).pop(value);
               },
               style: ElevatedButton.styleFrom(
@@ -205,6 +272,7 @@ class _ManageFeedbackScreenState extends State<ManageFeedbackScreen> {
       body: SafeArea(
         top: false,
         child: StreamBuilder<List<FeedbackEntry>>(
+          key: ValueKey<int>(_refreshVersion),
           stream: _feedbackService.watchAllFeedback(),
           builder:
               (
@@ -212,13 +280,25 @@ class _ManageFeedbackScreenState extends State<ManageFeedbackScreen> {
                 AsyncSnapshot<List<FeedbackEntry>> snapshot,
               ) {
                 if (snapshot.hasError) {
-                  return _FeedbackStateCard(
-                    icon: Icons.cloud_off_outlined,
-                    title: 'Unable to load feedback',
-                    message: 'Check Firestore rules and try again.',
-                    primaryTextColor: primaryTextColor,
-                    backgroundColor: cardColor,
-                    borderColor: borderColor,
+                  return RefreshIndicator(
+                    onRefresh: _refreshFeedback,
+                    color: primaryTextColor,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(
+                        parent: BouncingScrollPhysics(),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      children: <Widget>[
+                        _FeedbackStateCard(
+                          icon: Icons.cloud_off_outlined,
+                          title: 'Unable to load feedback',
+                          message: 'Check Firestore rules and try again.',
+                          primaryTextColor: primaryTextColor,
+                          backgroundColor: cardColor,
+                          borderColor: borderColor,
+                        ),
+                      ],
+                    ),
                   );
                 }
 
@@ -232,33 +312,56 @@ class _ManageFeedbackScreenState extends State<ManageFeedbackScreen> {
                 final List<FeedbackEntry> feedbackItems =
                     snapshot.data ?? <FeedbackEntry>[];
                 if (feedbackItems.isEmpty) {
-                  return _FeedbackStateCard(
-                    icon: Icons.rate_review_outlined,
-                    title: 'No feedback yet',
-                    message: 'User feedback will appear here.',
-                    primaryTextColor: primaryTextColor,
-                    backgroundColor: cardColor,
-                    borderColor: borderColor,
+                  return RefreshIndicator(
+                    onRefresh: _refreshFeedback,
+                    color: primaryTextColor,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(
+                        parent: BouncingScrollPhysics(),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      children: <Widget>[
+                        _FeedbackStateCard(
+                          icon: Icons.rate_review_outlined,
+                          title: 'No feedback yet',
+                          message: 'User feedback will appear here.',
+                          primaryTextColor: primaryTextColor,
+                          backgroundColor: cardColor,
+                          borderColor: borderColor,
+                        ),
+                      ],
+                    ),
                   );
                 }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                  itemCount: feedbackItems.length,
-                  itemBuilder: (BuildContext context, int index) {
-                    final FeedbackEntry feedback = feedbackItems[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _FeedbackCard(
-                        feedback: feedback,
-                        isReplying: _replyingIds.contains(feedback.id),
-                        primaryTextColor: primaryTextColor,
-                        backgroundColor: cardColor,
-                        borderColor: borderColor,
-                        onReply: () => _replyToFeedback(feedback),
-                      ),
-                    );
-                  },
+                return RefreshIndicator(
+                  onRefresh: _refreshFeedback,
+                  color: primaryTextColor,
+                  child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                    itemCount: feedbackItems.length,
+                    itemBuilder: (BuildContext context, int index) {
+                      final FeedbackEntry feedback = feedbackItems[index];
+                      return Padding(
+                        key: ValueKey<String>(feedback.id),
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _FeedbackCard(
+                          feedback: feedback,
+                          isReplying: _replyingIds.contains(feedback.id),
+                          primaryTextColor: primaryTextColor,
+                          backgroundColor: cardColor,
+                          borderColor: borderColor,
+                          onReply: () => _replyToFeedback(feedback),
+                          onDelete: () {
+                            _deleteFeedback(feedback);
+                          },
+                        ),
+                      );
+                    },
+                  ),
                 );
               },
         ),
@@ -275,6 +378,7 @@ class _FeedbackCard extends StatelessWidget {
     required this.backgroundColor,
     required this.borderColor,
     required this.onReply,
+    required this.onDelete,
   });
 
   final FeedbackEntry feedback;
@@ -283,6 +387,7 @@ class _FeedbackCard extends StatelessWidget {
   final Color backgroundColor;
   final Color borderColor;
   final VoidCallback onReply;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -378,34 +483,48 @@ class _FeedbackCard extends StatelessWidget {
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
-              child: ElevatedButton.icon(
-                onPressed: isReplying ? null : onReply,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryTextColor,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  IconButton(
+                    tooltip: 'Delete feedback',
+                    onPressed: onDelete,
+                    icon: Icon(
+                      Icons.delete_outline,
+                      color: Colors.red.shade700,
+                    ),
                   ),
-                ),
-                icon: isReplying
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.reply_outlined),
-                label: Text(
-                  feedback.isReplied ? 'Update Reply' : 'Reply',
-                  style: const TextStyle(
-                    fontFamily: 'Times New Roman',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    onPressed: isReplying ? null : onReply,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryTextColor,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    icon: isReplying
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.reply_outlined),
+                    label: Text(
+                      feedback.isReplied ? 'Update Reply' : 'Reply',
+                      style: const TextStyle(
+                        fontFamily: 'Times New Roman',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ],

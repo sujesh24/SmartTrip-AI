@@ -28,6 +28,7 @@ abstract class AuthServiceBase {
 
   Future<void> signOut();
   Future<DeleteAccountResult> deleteCurrentUser();
+  Future<void> updateUserProfile({String? name, String? avatarPath});
 }
 
 class AuthService implements AuthServiceBase {
@@ -187,6 +188,32 @@ class AuthService implements AuthServiceBase {
       return DeleteAccountResult.failure(
         'Unable to delete account right now. Please try again.',
       );
+    }
+  }
+
+  @override
+  Future<void> updateUserProfile({String? name, String? avatarPath}) async {
+    final String? uid = currentUserId;
+    if (uid == null || uid.isEmpty) {
+      return;
+    }
+
+    try {
+      final DocumentReference<Map<String, dynamic>> document = _firestore
+          .collection('users')
+          .doc(uid);
+      final Map<String, Object?> data = <String, Object?>{
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      if (name != null && name.trim().isNotEmpty) {
+        data['name'] = name.trim();
+      }
+      if (avatarPath != null && avatarPath.trim().isNotEmpty) {
+        data['avatarPath'] = avatarPath.trim();
+      }
+      await document.set(data, SetOptions(merge: true));
+    } catch (_) {
+      // Profile update failures should not block the app.
     }
   }
 

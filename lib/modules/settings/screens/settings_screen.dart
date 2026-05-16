@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/theme/app_colors.dart';
 import 'package:smarttrip_ai/theme/app_theme_controller.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
+import 'package:smarttrip_ai/modules/feedback/screens/feedback_screen.dart';
 import 'package:smarttrip_ai/modules/settings/screens/manage_account_screen.dart';
 import 'package:smarttrip_ai/modules/settings/services/settings_preferences_service.dart';
 import 'package:smarttrip_ai/modules/user/screens/signup_screen.dart';
@@ -103,6 +104,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ManageAccountScreen(authService: widget.authService),
+      ),
+    );
+  }
+
+  void _openFeedback() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => FeedbackScreen(authService: widget.authService),
       ),
     );
   }
@@ -258,7 +267,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           key: const Key('settings_notifications_toggle'),
                           value: _notificationsEnabled,
                           onChanged: _toggleNotifications,
-                          activeColor: accentColor,
+                          activeThumbColor: accentColor,
                           activeTrackColor: accentColor.withValues(alpha: 0.45),
                           inactiveThumbColor: primaryTextColor.withValues(
                             alpha: 0.85,
@@ -308,7 +317,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             key: const Key('settings_theme_toggle'),
                             value: isDarkMode,
                             onChanged: _toggleTheme,
-                            activeColor: accentColor,
+                            activeThumbColor: accentColor,
                             activeTrackColor: accentColor.withValues(
                               alpha: 0.45,
                             ),
@@ -352,6 +361,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Icons.open_in_new_rounded,
                     color: primaryTextColor,
                   ),
+                ),
+                Divider(height: 1, color: borderColor),
+                ListTile(
+                  key: const Key('settings_feedback_tile'),
+                  onTap: _openFeedback,
+                  leading: Icon(
+                    Icons.rate_review_outlined,
+                    color: primaryTextColor,
+                  ),
+                  title: Text(
+                    'Feedback',
+                    style: TextStyle(
+                      color: primaryTextColor,
+                      fontFamily: 'Times New Roman',
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Send us a message or rating',
+                    style: TextStyle(
+                      color: primaryTextColor.withValues(alpha: 0.7),
+                      fontFamily: 'Times New Roman',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  trailing: Icon(Icons.chevron_right, color: primaryTextColor),
                 ),
               ],
             ),

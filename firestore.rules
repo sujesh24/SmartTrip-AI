@@ -1,0 +1,58 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return signedIn() &&
+        request.auth.token.email == 'admin@planmytripai.com';
+    }
+
+    match /users/{userId} {
+      allow read, create, update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+
+      match /announcement_reads/{announcementId} {
+        allow read, create, update, delete: if isOwner(userId);
+      }
+    }
+
+    match /feedback/{feedbackId} {
+      allow create: if signedIn() &&
+        request.resource.data.user_id == request.auth.uid;
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.user_id == request.auth.uid);
+      allow update: if isAdmin() ||
+        (
+          signedIn() &&
+          resource.data.user_id == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['is_read'])
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if signedIn();
+      allow create: if isAdmin() &&
+        request.resource.data.keys().hasAll(['title', 'message']);
+      allow update, delete: if isAdmin();
+    }
+
+    match /generated_places/{placeId} {
+      allow read, delete: if isAdmin();
+      allow create, update: if signedIn();
+    }
+
+    match /trending_places/{placeId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}

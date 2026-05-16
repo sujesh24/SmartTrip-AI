@@ -7,6 +7,7 @@ import 'package:smarttrip_ai/modules/admin/common/admin_constants.dart';
 import 'package:smarttrip_ai/modules/admin/screens/admin_dashboard_screen.dart';
 import 'package:smarttrip_ai/modules/admin/screens/admin_verification_screen.dart';
 import 'package:smarttrip_ai/modules/admin/services/admin_session_service.dart';
+import 'package:smarttrip_ai/modules/ai_generation/common/app_snack_bar.dart';
 import 'package:smarttrip_ai/modules/home/screens/home_screen.dart';
 import 'package:smarttrip_ai/modules/user/screens/signup_screen.dart';
 import 'package:smarttrip_ai/modules/user/services/auth_service.dart';
@@ -79,6 +80,7 @@ class MyApp extends StatelessWidget {
       builder: (BuildContext context, ThemeMode themeMode, Widget? child) {
         return MaterialApp(
           title: 'PlanMyTrip AI',
+          scaffoldMessengerKey: AppSnackBar.messengerKey,
           theme: AppThemeData.lightTheme,
           darkTheme: AppThemeData.darkTheme,
           themeMode: themeMode,

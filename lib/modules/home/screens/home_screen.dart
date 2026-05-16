@@ -1,11 +1,13 @@
-import 'dart:async';
-
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:smarttrip_ai/modules/ai_generation/common/app_assets.dart';
+import 'dart:io';
 import 'package:smarttrip_ai/modules/ai_generation/screens/step1.dart';
-import 'package:smarttrip_ai/modules/feedback/screens/feedback_screen.dart';
+import 'package:smarttrip_ai/modules/feedback/models/feedback_entry.dart';
 import 'package:smarttrip_ai/modules/feedback/screens/notifications_screen.dart';
 import 'package:smarttrip_ai/modules/feedback/services/feedback_service.dart';
+import 'package:smarttrip_ai/modules/feedback/services/user_notification_service.dart';
 import 'package:smarttrip_ai/modules/home/common/home_username_formatter.dart';
 import 'package:smarttrip_ai/modules/home/screens/destination_detail_screen.dart';
 import 'package:smarttrip_ai/modules/home/screens/explore_more_destinations_screen.dart';
@@ -13,6 +15,7 @@ import 'package:smarttrip_ai/modules/home/services/home_destination_image_cache.
 import 'package:smarttrip_ai/modules/home/services/home_destination_image_loader.dart';
 import 'package:smarttrip_ai/modules/home/widgets/add_itinerary_popup.dart';
 import 'package:smarttrip_ai/modules/home/widgets/home_destination_card.dart';
+import 'package:smarttrip_ai/modules/saved_itineraries/screens/saved_trips_screen.dart';
 import 'package:smarttrip_ai/modules/saved_itineraries/services/saved_itinerary_store.dart';
 import 'package:smarttrip_ai/modules/settings/screens/settings_screen.dart';
 import 'package:smarttrip_ai/modules/trending_places/models/trending_place.dart';
@@ -30,6 +33,7 @@ class HomeScreen extends StatefulWidget {
     this.savedItineraryStore,
     this.placesService,
     this.feedbackService,
+    this.notificationService,
   });
 
   final AuthServiceBase? authService;
@@ -38,6 +42,7 @@ class HomeScreen extends StatefulWidget {
   final SavedItineraryStore? savedItineraryStore;
   final TrendingPlacesServiceBase? placesService;
   final FeedbackServiceBase? feedbackService;
+  final UserNotificationServiceBase? notificationService;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -47,9 +52,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late final AuthServiceBase _authService;
   late final TrendingPlacesServiceBase _placesService;
   late final FeedbackServiceBase _feedbackService;
+  late final UserNotificationServiceBase _notificationService;
   late final AnimationController _popupAnimationController;
   late final AnimationController _refreshBounceController;
   late final Animation<double> _refreshBounceScale;
+  String? _customUsername;
+  String? _localAvatarPath;
 
   bool _isPopupOpen = false;
   bool _isOpeningPopup = false;
@@ -62,8 +70,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.initState();
 
     _authService = widget.authService ?? AuthService();
-    _placesService = widget.placesService ?? TrendingPlacesService();
-    _feedbackService = widget.feedbackService ?? FeedbackService();
+    final bool hasFirebase = Firebase.apps.isNotEmpty;
+    _placesService =
+        widget.placesService ??
+        (hasFirebase ? TrendingPlacesService() : _NoOpTrendingPlacesService());
+    _feedbackService =
+        widget.feedbackService ??
+        (hasFirebase ? FeedbackService() : _NoOpFeedbackService());
+    _notificationService =
+        widget.notificationService ??
+        (hasFirebase
+            ? FirestoreUserNotificationService(
+                feedbackService: _feedbackService,
+              )
+            : FeedbackOnlyUserNotificationService(service: _feedbackService));
 
     _popupAnimationController = AnimationController(
       vsync: this,
@@ -91,6 +111,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         weight: 55,
       ),
     ]).animate(_refreshBounceController);
+    _loadCustomUsername();
   }
 
   @override
@@ -106,6 +127,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     setState(() => _isRefreshing = true);
+    await _loadCustomUsername();
     await _refreshBounceController.forward(from: 0);
     await Future<void>.delayed(const Duration(milliseconds: 250));
 
@@ -166,10 +188,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     Navigator.of(sheetContext).pop();
   }
 
-  void _openSettings() {
-    Navigator.of(context).push(
+  Future<void> _openSettings() async {
+    await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => SettingsScreen(authService: _authService),
+      ),
+    );
+    if (mounted) {
+      await _loadCustomUsername();
+    }
+  }
+
+  void _openSavedTrips() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SavedTripsScreen(store: widget.savedItineraryStore),
       ),
     );
   }
@@ -189,17 +222,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         builder: (_) => NotificationsScreen(
           authService: _authService,
           feedbackService: _feedbackService,
-        ),
-      ),
-    );
-  }
-
-  void _openFeedback() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => FeedbackScreen(
-          authService: _authService,
-          feedbackService: _feedbackService,
+          notificationService: _notificationService,
         ),
       ),
     );
@@ -216,7 +239,35 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (userId == null || userId.isEmpty) {
       return Stream<int>.value(0);
     }
-    return _feedbackService.watchUnreadReplyCount(userId);
+    return _notificationService.watchUnreadCount(userId);
+  }
+
+  Future<void> _loadCustomUsername() async {
+    final String? userId = _authService.currentUserId;
+    if (userId == null || userId.isEmpty) {
+      return;
+    }
+
+    try {
+      final DocumentSnapshot<Map<String, dynamic>> snapshot =
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .get();
+      if (!mounted) {
+        return;
+      }
+      final String? name = snapshot.data()?['name'] as String?;
+      final String? avatarPath = snapshot.data()?['avatarPath'] as String?;
+      if (name != null && name.trim().isNotEmpty) {
+        setState(() => _customUsername = name.trim());
+      }
+      if (avatarPath != null && avatarPath.trim().isNotEmpty) {
+        setState(() => _localAvatarPath = avatarPath.trim());
+      }
+    } catch (_) {
+      // Silently fail; fall back to email-derived username.
+    }
   }
 
   @override
@@ -238,11 +289,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ? AppColors.darkBorder
             : const Color(0x338DA180);
 
-        final String username = formatHomeUsername(
-          _authService.currentUserEmail,
-        );
-        final String handle = '@${username.toLowerCase().replaceAll(' ', '')}';
-
+        final String username =
+            _customUsername ??
+            formatHomeUsername(_authService.currentUserEmail);
         return Scaffold(
           backgroundColor: pageColor,
           appBar: AppBar(
@@ -283,11 +332,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                     : AppColors.borderGreen.withValues(
                                         alpha: 0.3,
                                       ),
-                                child: Icon(
-                                  Icons.person,
-                                  color: titleColor,
-                                  size: 24,
-                                ),
+                                backgroundImage:
+                                    _localAvatarPath != null &&
+                                        _localAvatarPath!.isNotEmpty
+                                    ? FileImage(File(_localAvatarPath!))
+                                          as ImageProvider
+                                    : null,
+                                child: _localAvatarPath == null
+                                    ? Icon(
+                                        Icons.person,
+                                        color: titleColor,
+                                        size: 24,
+                                      )
+                                    : null,
                               ),
                               const SizedBox(width: 10),
                               Expanded(
@@ -305,19 +362,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                         fontSize: 27,
                                         fontWeight: FontWeight.w600,
                                         height: 1,
-                                      ),
-                                    ),
-                                    Text(
-                                      handle,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: titleColor.withValues(
-                                          alpha: 0.64,
-                                        ),
-                                        fontFamily: 'Times New Roman',
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
                                       ),
                                     ),
                                   ],
@@ -476,7 +520,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               return _HomeBottomNavigationBar(
                 onAddPressed: _showAddPopup,
                 onNotificationsPressed: _openNotifications,
-                onFeedbackPressed: _openFeedback,
+                onSavedItemsPressed: _openSavedTrips,
                 onSettingsPressed: _openSettings,
                 notificationBadgeCount: snapshot.data ?? 0,
                 isPopupOpen: _isPopupOpen,
@@ -663,7 +707,7 @@ class _HomeBottomNavigationBar extends StatelessWidget {
   const _HomeBottomNavigationBar({
     required this.onAddPressed,
     required this.onNotificationsPressed,
-    required this.onFeedbackPressed,
+    required this.onSavedItemsPressed,
     required this.onSettingsPressed,
     required this.notificationBadgeCount,
     required this.isPopupOpen,
@@ -671,7 +715,7 @@ class _HomeBottomNavigationBar extends StatelessWidget {
 
   final VoidCallback onAddPressed;
   final VoidCallback onNotificationsPressed;
-  final VoidCallback onFeedbackPressed;
+  final VoidCallback onSavedItemsPressed;
   final VoidCallback onSettingsPressed;
   final int notificationBadgeCount;
   final bool isPopupOpen;
@@ -748,11 +792,11 @@ class _HomeBottomNavigationBar extends StatelessWidget {
               ),
               Expanded(
                 child: _BottomNavItem(
-                  key: const Key('home_feedback_nav'),
-                  icon: Icons.rate_review_outlined,
-                  selectedIcon: Icons.rate_review,
-                  label: 'Feedback',
-                  onTap: onFeedbackPressed,
+                  key: const Key('home_saved_items_nav'),
+                  icon: Icons.bookmark_outline,
+                  selectedIcon: Icons.bookmark,
+                  label: 'Saved',
+                  onTap: onSavedItemsPressed,
                 ),
               ),
               Expanded(
@@ -881,5 +925,61 @@ class _BottomNavItem extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _NoOpFeedbackService implements FeedbackServiceBase {
+  @override
+  Future<void> markFeedbackRead(String feedbackId) async {}
+
+  @override
+  Future<void> replyToFeedback({
+    required String feedbackId,
+    required String reply,
+  }) async {}
+
+  @override
+  Future<void> submitFeedback({
+    required String userId,
+    required String userName,
+    required String message,
+    required int rating,
+  }) async {}
+
+  @override
+  Stream<List<FeedbackEntry>> watchAllFeedback() {
+    return Stream<List<FeedbackEntry>>.value(<FeedbackEntry>[]);
+  }
+
+  @override
+  Stream<List<FeedbackEntry>> watchRepliedFeedbackForUser(String userId) {
+    return Stream<List<FeedbackEntry>>.value(<FeedbackEntry>[]);
+  }
+
+  @override
+  Stream<int> watchUnreadReplyCount(String userId) {
+    return Stream<int>.value(0);
+  }
+
+  @override
+  Future<void> deleteFeedback(String feedbackId) async {}
+}
+
+class _NoOpTrendingPlacesService implements TrendingPlacesServiceBase {
+  @override
+  Future<void> addTrendingPlace(TrendingPlace place) async {}
+
+  @override
+  Future<void> deleteTrendingPlace(String placeId) async {}
+
+  @override
+  Future<int> seedDefaultTrendingPlaces() async => 0;
+
+  @override
+  Future<void> updateTrendingPlace(TrendingPlace place) async {}
+
+  @override
+  Stream<List<TrendingPlace>> watchTrendingPlaces() {
+    return Stream<List<TrendingPlace>>.value(<TrendingPlace>[]);
   }
 }
